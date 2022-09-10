@@ -88,7 +88,7 @@ class GetColorWidget(QtWidgets.QWidget):
         if isinstance(color, str):
             color = QtGui.QColor(color)
 
-        color = QtGui.QColor(*color.getRgb()[:3], self.alpha * 255)
+        color = QtGui.QColor(*color.getRgb()[:3], int(self.alpha * 255))
 
         self.facecolor = color
         self.update()
@@ -97,7 +97,7 @@ class GetColorWidget(QtWidgets.QWidget):
         if isinstance(color, str):
             color = QtGui.QColor(color)
 
-        color = QtGui.QColor(*color.getRgb()[:3], self.alpha * 255)
+        color = QtGui.QColor(*color.getRgb()[:3], int(self.alpha * 255))
 
         self.edgecolor = color
         self.update()
@@ -108,8 +108,8 @@ class GetColorWidget(QtWidgets.QWidget):
 
     def set_alpha(self, alpha):
         self.alpha = alpha
-        self.set_facecolor(QtGui.QColor(*self.facecolor.getRgb()[:3], self.alpha * 255))
-        self.set_edgecolor(QtGui.QColor(*self.edgecolor.getRgb()[:3], self.alpha * 255))
+        self.set_facecolor(QtGui.QColor(*self.facecolor.getRgb()[:3], int(self.alpha * 255)))
+        self.set_edgecolor(QtGui.QColor(*self.edgecolor.getRgb()[:3], int(self.alpha * 255)))
 
 
 class EditLayoutButton(QtWidgets.QPushButton):
@@ -751,12 +751,8 @@ class PlotFileWidget(QtWidgets.QWidget):
         b_plot = QtWidgets.QPushButton('Plot!', self)
         b_plot.clicked.connect(self.b_plot_file)
 
-        # TODO
-
-
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setMinimumHeight(100)
         self.file_info = QtWidgets.QLabel()
         self.file_info.setWordWrap(True)
         self.file_info.setAlignment(Qt.AlignLeft | Qt.AlignTop)
@@ -776,6 +772,7 @@ class PlotFileWidget(QtWidgets.QWidget):
         self.t1 = QtWidgets.QLineEdit()
         self.t1.setPlaceholderText("default")
 
+        self.shape_selector= ShapeSelector(m=self.m)
 
         layername = QtWidgets.QHBoxLayout()
         layername.addWidget(self.blayer)
@@ -783,33 +780,30 @@ class PlotFileWidget(QtWidgets.QWidget):
         layername.addWidget(self.t1)
 
 
+        options = QtWidgets.QVBoxLayout()
+        options.setAlignment(Qt.AlignTop|Qt.AlignLeft)
 
+        options.addWidget(self.cb1)
+        options.addWidget(self.cb2)
+        options.addLayout(layername)
+        options.addWidget(self.shape_selector)
+        options.addWidget(b_plot)
+
+        optionwidget = QtWidgets.QWidget()
+        optionwidget.setLayout(options)
 
         optionscroll = QtWidgets.QScrollArea()
         optionscroll.setWidgetResizable(True)
-        optionscroll.setMinimumHeight(100)
-
-        optionwidget = QtWidgets.QWidget()
-        options = QtWidgets.QVBoxLayout()
-        options.addWidget(self.cb1)
-        options.addWidget(self.cb2)
-
-        options.addLayout(layername)
-
-        self.shape_selector= ShapeSelector(m=self.m)
-        options.addWidget(self.shape_selector)
-
-        options.addWidget(b_plot)
-
-        optionwidget.setLayout(options)
+        optionscroll.setMinimumWidth(200)
         optionscroll.setWidget(optionwidget)
 
-        self.options_layout = QtWidgets.QHBoxLayout()
         options_split = QtWidgets.QSplitter(Qt.Horizontal)
 
         options_split.addWidget(scroll)
         options_split.addWidget(optionscroll)
+        options_split.setSizes((500, 300))
 
+        self.options_layout = QtWidgets.QHBoxLayout()
         self.options_layout.addWidget(options_split)
 
         self.layout = QtWidgets.QVBoxLayout()
@@ -889,8 +883,12 @@ class PlotFileWidget(QtWidgets.QWidget):
         if info is not None:
             self.file_info.setText(info)
 
-        self.window().layout.addWidget(self)
-        self.window().show()
+        # # TODO
+        self.window = NewWindow(parent=self.parent)
+        self.window.layout.addWidget(self)
+        #self.window.setWindowFlags(Qt.WindowStaysOnTopHint)
+        self.window.resize(800, 500)
+        self.window.show()
 
 
     def b_plot_file(self):
@@ -1056,7 +1054,12 @@ class PlotNetCDFWidget(PlotFileWidget):
         l.addWidget(self.sel)
 
 
-        self.layout.addLayout(l)
+        title = QtWidgets.QLabel("<b>Variables used for plotting:</b>")
+        withtitle = QtWidgets.QVBoxLayout()
+        withtitle.addWidget(title)
+        withtitle.addLayout(l)
+
+        self.layout.addLayout(withtitle)
 
     def get_crs(self):
         return get_crs(self.crs.text())
@@ -1143,6 +1146,7 @@ class PlotCSVWidget(PlotFileWidget):
         tparam = QtWidgets.QLabel("parameter:")
         tcrs = QtWidgets.QLabel("crs:")
 
+
         l.addWidget(tx)
         l.addWidget(self.x)
         l.addWidget(ty)
@@ -1152,7 +1156,13 @@ class PlotCSVWidget(PlotFileWidget):
         l.addWidget(tcrs)
         l.addWidget(self.crs)
 
-        self.layout.addLayout(l)
+
+        title = QtWidgets.QLabel("<b>Variables used for plotting:</b>")
+        withtitle = QtWidgets.QVBoxLayout()
+        withtitle.addWidget(title)
+        withtitle.addLayout(l)
+        withtitle.setAlignment(Qt.AlignBottom)
+        self.layout.addLayout(withtitle)
 
     def get_crs(self):
         return get_crs(self.crs.text())
@@ -1202,7 +1212,6 @@ class NewWindow(ResizableWindow):
         self.parent = parent
         self.setWindowTitle("OpenFile")
 
-        #self.setCentralWidget(self.widget)
         self.layout = QtWidgets.QVBoxLayout()
         self.layout.setContentsMargins(5, 20, 5, 5)
 
@@ -1297,10 +1306,9 @@ class OpenDataStartTab(QtWidgets.QWidget):
             except Exception:
                 if self.txt:
                     self.txt.setText("File could not be opened...")
-
                 import traceback
                 show_error_popup(
-                    text=f"There was an error while trying to open the file.",
+                    text="There was an error while trying to open the file.",
                     title="Unable to open file.",
                     details=traceback.format_exc())
 
