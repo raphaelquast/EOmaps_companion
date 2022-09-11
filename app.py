@@ -30,12 +30,15 @@ class MyMap(EOmapsCanvas):
 
         m.add_feature.preset.coastline()
 
-        m.add_wms.OpenStreetMap.add_layer.default(layer="OSM")
-        m.add_wms.OpenStreetMap.add_layer.default(layer="OSM_05", alpha=0.5)
+        try:
+            m.add_wms.OpenStreetMap.add_layer.default(layer="OSM")
+            m.add_wms.OpenStreetMap.add_layer.default(layer="OSM_05", alpha=0.5)
 
-        m.add_wms.OpenStreetMap.add_layer.stamen_watercolor(layer="OSM watercolor")
-        m.add_wms.ESA_WorldCover.add_layer.WORLDCOVER_2020_MAP(layer="ESA WorldCover")
-
+            m.add_wms.OpenStreetMap.add_layer.stamen_watercolor(layer="OSM watercolor")
+            m.add_wms.ESA_WorldCover.add_layer.WORLDCOVER_2020_MAP(layer="ESA WorldCover")
+        except Exception:
+            print("WebMap layers could not be added...")
+            pass
         # m.add_feature.preset.ocean(layer="ocean")
         # m.add_feature.preset.land(layer = "land")
 
