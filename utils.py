@@ -510,8 +510,8 @@ class ShowLayerWidget(QtWidgets.QWidget):
         b1 = QtWidgets.QPushButton("New Window")
         b1.clicked.connect(self.new_window)
         l1 = QtWidgets.QLabel("<b>CRS:<b>")
-        self.t1 = QtWidgets.QLineEdit()
-        self.t1.setText("Maps.CRS.GOOGLE_MERCATOR")
+        self.t1 = InputCRS()
+        self.t1.setPlaceholderText("Maps.CRS.GOOGLE_MERCATOR")
 
         new = QtWidgets.QGridLayout()
 
@@ -585,6 +585,7 @@ def _str_to_bool(val):
 
 class ShapeSelector(QtWidgets.QWidget):
 
+
     _ignoreargs = ["shade_hook", "agg_hook"]
 
     _argspecials = dict(aggregator = {"None": None},
@@ -601,11 +602,11 @@ class ShapeSelector(QtWidgets.QWidget):
                      )
 
 
-    def __init__(self, *args, m=None, **kwargs):
+    def __init__(self, *args, m=None, default_shape = "shade_raster", **kwargs):
         super().__init__(*args, **kwargs)
         self.m = m
+        self.shape = default_shape
 
-        self.shape = "shade_raster"
 
         self.layout = QtWidgets.QVBoxLayout()
         self.options = QtWidgets.QVBoxLayout()
@@ -717,6 +718,7 @@ class ShapeSelector(QtWidgets.QWidget):
 class PlotFileWidget(QtWidgets.QWidget):
 
     file_endings = None
+    default_shape = "shade_raster"
 
     def __init__(self, *args, parent=None, close_on_plot=True, attach_tab_after_plot=True, tab=None, **kwargs):
         """
@@ -748,16 +750,18 @@ class PlotFileWidget(QtWidgets.QWidget):
         self.file_path = None
 
 
-        b_plot = QtWidgets.QPushButton('Plot!', self)
-        b_plot.clicked.connect(self.b_plot_file)
+        self.b_plot = QtWidgets.QPushButton('Plot!', self)
+        self.b_plot.clicked.connect(self.b_plot_file)
+
 
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
         self.file_info = QtWidgets.QLabel()
         self.file_info.setWordWrap(True)
-        self.file_info.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        # self.file_info.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.file_info.setTextInteractionFlags(Qt.TextSelectableByMouse)
         scroll.setWidget(self.file_info)
+
 
         self.cb1 = QtWidgets.QCheckBox("Annotate on click")
         self.cb1.stateChanged.connect(self.b_add_annotate_cb)
@@ -770,31 +774,30 @@ class PlotFileWidget(QtWidgets.QWidget):
         self.blayer.stateChanged.connect(self.b_layer_checkbox)
         self.t1_label = QtWidgets.QLabel("Layer:")
         self.t1 = QtWidgets.QLineEdit()
-        self.t1.setPlaceholderText("default")
+        self.t1.setPlaceholderText(str(self.m.BM.bg_layer))
 
-        self.shape_selector= ShapeSelector(m=self.m)
+        self.shape_selector= ShapeSelector(m=self.m, default_shape=self.default_shape)
 
+        self.setlayername = QtWidgets.QWidget()
         layername = QtWidgets.QHBoxLayout()
         layername.addWidget(self.blayer)
         layername.addWidget(self.t1_label)
         layername.addWidget(self.t1)
+        self.setlayername.setLayout(layername)
 
 
         options = QtWidgets.QVBoxLayout()
-        options.setAlignment(Qt.AlignTop|Qt.AlignLeft)
-
         options.addWidget(self.cb1)
         options.addWidget(self.cb2)
-        options.addLayout(layername)
+        options.addWidget(self.setlayername)
         options.addWidget(self.shape_selector)
-        options.addWidget(b_plot)
-
         optionwidget = QtWidgets.QWidget()
         optionwidget.setLayout(options)
 
         optionscroll = QtWidgets.QScrollArea()
         optionscroll.setWidgetResizable(True)
         optionscroll.setMinimumWidth(200)
+
         optionscroll.setWidget(optionwidget)
 
         options_split = QtWidgets.QSplitter(Qt.Horizontal)
@@ -806,8 +809,37 @@ class PlotFileWidget(QtWidgets.QWidget):
         self.options_layout = QtWidgets.QHBoxLayout()
         self.options_layout.addWidget(options_split)
 
+        self.x = QtWidgets.QLineEdit("x")
+        self.y = QtWidgets.QLineEdit("y")
+        self.parameter = QtWidgets.QLineEdit("param")
+        self.crs = InputCRS()
+
+        tx = QtWidgets.QLabel("x:")
+        ty = QtWidgets.QLabel("y:")
+        tparam = QtWidgets.QLabel("parameter:")
+        tcrs = QtWidgets.QLabel("crs:")
+
+        plotargs = QtWidgets.QHBoxLayout()
+        plotargs.addWidget(tx)
+        plotargs.addWidget(self.x)
+        plotargs.addWidget(ty)
+        plotargs.addWidget(self.y)
+        plotargs.addWidget(tparam)
+        plotargs.addWidget(self.parameter)
+        plotargs.addWidget(tcrs)
+        plotargs.addWidget(self.crs)
+
+        plotargs.addWidget(self.b_plot)
+
+        self.title = QtWidgets.QLabel("<b>Set plot variables:</b>")
+        withtitle = QtWidgets.QVBoxLayout()
+        withtitle.addWidget(self.title)
+        withtitle.addLayout(plotargs)
+        withtitle.setAlignment(Qt.AlignBottom)
+
         self.layout = QtWidgets.QVBoxLayout()
-        self.layout.addLayout(self.options_layout)
+        self.layout.addLayout(self.options_layout, stretch=1)
+        self.layout.addLayout(withtitle)
 
         self.setLayout(self.layout)
 
@@ -817,7 +849,7 @@ class PlotFileWidget(QtWidgets.QWidget):
         return self.parent.m
 
     def get_layer(self):#
-        layer = "default"
+        layer = self.m.BM.bg_layer
 
         if self.blayer.isChecked():
             layer = self.t1.text()
@@ -936,6 +968,17 @@ class PlotFileWidget(QtWidgets.QWidget):
         self.tab.setCurrentIndex(tabindex)
         self.tab.setTabToolTip(tabindex, str(self.file_path))
 
+        self.title.setText("<b>Variables used for plotting:</b>")
+
+        self.t1.setReadOnly(True)
+        self.x.setReadOnly(True)
+        self.y.setReadOnly(True)
+        self.parameter.setReadOnly(True)
+        self.crs.setReadOnly(True)
+
+        self.shape_selector.setEnabled(False)
+        self.setlayername.setEnabled(False)
+        self.b_plot.close()
 
 def show_error_popup(text=None, info=None, title=None, details=None):
    msg = QtWidgets.QMessageBox()
@@ -969,6 +1012,13 @@ class PlotGeoTIFFWidget(PlotFileWidget):
             import io
             info = io.StringIO()
             f.info(info)
+
+            self.crs.setText(f.rio.crs.to_string())
+            self.parameter.setText(next((i for i in f.variables if i not in f.coords)))
+
+        self.x.setText("x")
+        self.y.setText("y")
+
 
         return file_path, info.getvalue()
 
@@ -1053,13 +1103,17 @@ class PlotNetCDFWidget(PlotFileWidget):
         l.addWidget(tsel)
         l.addWidget(self.sel)
 
+        withtitle = QtWidgets.QWidget()
+        withtitlelayout = QtWidgets.QVBoxLayout()
 
         title = QtWidgets.QLabel("<b>Variables used for plotting:</b>")
-        withtitle = QtWidgets.QVBoxLayout()
-        withtitle.addWidget(title)
-        withtitle.addLayout(l)
+        withtitlelayout.addWidget(title)
+        withtitlelayout.addLayout(l)
 
-        self.layout.addLayout(withtitle)
+        withtitle.setLayout(withtitlelayout)
+        withtitle.setMaximumHeight(60)
+
+        self.layout.addWidget(withtitle)
 
     def get_crs(self):
         return get_crs(self.crs.text())
@@ -1125,44 +1179,39 @@ class PlotNetCDFWidget(PlotFileWidget):
         self.b_add_annotate_cb()
 
 
+class InputCRS(QtWidgets.QLineEdit):
+    def __init__(self, *args, **kwargs):
+        """
+        A QtWidgets.QLineEdit widget with autocompletion for available CRS
+        """
+        super().__init__(*args,**kwargs)
+        from eomaps import Maps
+
+        crs_options = ["Maps.CRS." + key for key, val in Maps.CRS.__dict__.items()
+                       if not key.startswith("_")
+                       and (isinstance(val, Maps.CRS.ABCMeta)
+                            or isinstance(val, Maps.CRS.CRS))]
+        completer = QtWidgets.QCompleter(crs_options)
+        self.setCompleter(completer)
+
+        self.setPlaceholderText("4326")
+
+    def text(self):
+        t = super().text()
+        if len(t) == 0:
+            return self.placeholderText()
+        else:
+            return t
 
 class PlotCSVWidget(PlotFileWidget):
 
+    default_shape = "ellipses"
     file_endings = (".csv")
-
 
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
 
-        l = QtWidgets.QHBoxLayout()
-        self.x = QtWidgets.QLineEdit("x")
-        self.y = QtWidgets.QLineEdit("y")
-        self.parameter = QtWidgets.QLineEdit("param")
-        self.crs = QtWidgets.QLineEdit("4326")
-
-        tx = QtWidgets.QLabel("x:")
-        ty = QtWidgets.QLabel("y:")
-        tparam = QtWidgets.QLabel("parameter:")
-        tcrs = QtWidgets.QLabel("crs:")
-
-
-        l.addWidget(tx)
-        l.addWidget(self.x)
-        l.addWidget(ty)
-        l.addWidget(self.y)
-        l.addWidget(tparam)
-        l.addWidget(self.parameter)
-        l.addWidget(tcrs)
-        l.addWidget(self.crs)
-
-
-        title = QtWidgets.QLabel("<b>Variables used for plotting:</b>")
-        withtitle = QtWidgets.QVBoxLayout()
-        withtitle.addWidget(title)
-        withtitle.addLayout(l)
-        withtitle.setAlignment(Qt.AlignBottom)
-        self.layout.addLayout(withtitle)
 
     def get_crs(self):
         return get_crs(self.crs.text())
