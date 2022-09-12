@@ -3,6 +3,8 @@ from PyQt5.QtCore import Qt, QRectF
 from pathlib import Path
 
 from .base import ResizableWindow
+from .wms_utils import AddWMS
+
 
 class GetColorWidget(QtWidgets.QWidget):
     def __init__(self, facecolor="#ff0000", edgecolor="#000000", linewidth=1, alpha=1):
@@ -180,85 +182,6 @@ class AlphaSlider(QtWidgets.QSlider):
 
 
 
-
-
-from PyQt5 import QtCore
-
-
-
-
-# TODO move to own class
-class AddWMS_S1GBM(QtWidgets.QWidget):
-    signal_layer_created = QtCore.Signal(str)
-    layer_prefix = "S1GBM_"
-
-    def __init__(self, *args, m, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.m = m
-
-        self.t = QtWidgets.QLabel("S1GBM:")
-        self.b = QtWidgets.QPushButton("Add")
-        self.b.clicked.connect(self.add_layer)
-
-        self.drop = QtWidgets.QComboBox()
-        for key in ["vv", "vh"]:
-            if key in ["m"] or key.startswith("_"):
-                continue
-
-            self.drop.addItem(key)
-
-        layout = QtWidgets.QHBoxLayout()
-        layout.addWidget(self.t)
-        layout.addWidget(self.drop)
-        layout.addWidget(self.b)
-
-        self.setLayout(layout)
-
-
-    def add_layer(self):
-        wmslayer = self.drop.currentText()
-        layer = self.layer_prefix + wmslayer
-        getattr(self.m.add_wms.S1GBM.add_layer, wmslayer)(layer=layer)
-        self.m.show_layer(layer)
-        self.signal_layer_created.emit(layer)
-
-
-class AddWMS_OSM(QtWidgets.QWidget):
-    signal_layer_created = QtCore.Signal(str)
-    layer_prefix = "OSM_"
-
-    def __init__(self, *args, m, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.m = m
-
-        self.t = QtWidgets.QLabel("OpenStreetMap:")
-        self.b = QtWidgets.QPushButton("Add")
-        self.b.clicked.connect(self.add_layer)
-
-        self.drop = QtWidgets.QComboBox()
-        for key in self.m.add_wms.OpenStreetMap.add_layer.__dict__.keys():
-            if key in ["m"] or key.startswith("_"):
-                continue
-
-            self.drop.addItem(key)
-
-        layout = QtWidgets.QHBoxLayout()
-        layout.addWidget(self.t)
-        layout.addWidget(self.drop)
-        layout.addWidget(self.b)
-
-        self.setLayout(layout)
-
-
-    def add_layer(self):
-        wmslayer = self.drop.currentText()
-        layer = self.layer_prefix + wmslayer
-        getattr(self.m.add_wms.OpenStreetMap.add_layer, wmslayer)(layer=layer)
-        self.m.show_layer(layer)
-        self.signal_layer_created.emit(layer)
-
-
-
 class DrawerWidget(QtWidgets.QWidget):
 
     _polynames = {
@@ -359,7 +282,7 @@ class AutoUpdateComboBox(QtWidgets.QComboBox):
 
 
     def update_layers(self):
-
+        print("updating layers")
         layers = self.layers
         if set(layers) == set(self.last_layers):
             return
@@ -422,7 +345,6 @@ class PeekLayerWidget(QtWidgets.QWidget):
         dropdown.addWidget(label)
         dropdown.addWidget(self.layerselector)
 
-        buttons = QtWidgets.QGridLayout()
         self.b1 = QtWidgets.QRadioButton("top")
         self.b1.toggled.connect(self.bcb1)
         self.b1.setMaximumWidth(100)
@@ -441,12 +363,12 @@ class PeekLayerWidget(QtWidgets.QWidget):
         self.b5.setMaximumWidth(100)
         self.b5.setChecked(True)
 
-        buttons.addWidget(self.b1, 0, 0)
-        buttons.addWidget(self.b2, 0, 1)
-        buttons.addWidget(self.b3, 1, 0)
-        buttons.addWidget(self.b4, 1, 1)
 
-        custom_how_layout = QtWidgets.QHBoxLayout()
+
+        alphalabel = QtWidgets.QLabel("Transparency:")
+        self.alphaslider = AlphaSlider(Qt.Horizontal)
+        self.alphaslider.valueChanged.connect(self.add_peek_cb)
+        self.alphaslider.setMaximumWidth(400)
 
         self.slider = QtWidgets.QSlider(Qt.Horizontal)
         self.slider.setToolTip("set percentage")
@@ -459,7 +381,6 @@ class PeekLayerWidget(QtWidgets.QWidget):
         self.sider_value_changed(50)
 
         self.slider.setMinimumWidth(50)
-
         self.slider.valueChanged.connect(self.sider_value_changed)
 
         self.slider.setStyleSheet("""QToolTip {
@@ -470,16 +391,25 @@ class PeekLayerWidget(QtWidgets.QWidget):
                                border: none;
                                }""")
 
+        custom_how_layout = QtWidgets.QHBoxLayout()
         custom_how_layout.addWidget(self.b5)
         custom_how_layout.addWidget(self.slider)
 
-        buttons.addLayout(custom_how_layout, 2, 0, 1, 2, Qt.AlignLeft)
+        buttons = QtWidgets.QGridLayout()
+        buttons.addLayout(custom_how_layout, 0, 0, 1, 2, Qt.AlignLeft)
+        buttons.addWidget(self.b1, 1, 0)
+        buttons.addWidget(self.b2, 1, 1)
+        buttons.addWidget(self.b3, 2, 0)
+        buttons.addWidget(self.b4, 2, 1)
         buttons.setAlignment(Qt.AlignTop)
 
 
         layout = QtWidgets.QVBoxLayout()
         layout.addLayout(dropdown)
         layout.addLayout(buttons)
+        layout.addWidget(alphalabel)
+        layout.addWidget(self.alphaslider)
+
         layout.setAlignment(Qt.AlignTop)
 
         self.setLayout(layout)
@@ -495,23 +425,28 @@ class PeekLayerWidget(QtWidgets.QWidget):
     def bcb1(self):
         if self.b1.isChecked():
             self.set_how("top")
+            self.add_peek_cb()
 
     def bcb2(self):
         if self.b2.isChecked():
             self.set_how("bottom")
+            self.add_peek_cb()
 
     def bcb3(self):
         if self.b3.isChecked():
             self.set_how("left")
+            self.add_peek_cb()
 
     def bcb4(self):
         if self.b4.isChecked():
             self.set_how("right")
+            self.add_peek_cb()
 
     def bcb5(self):
         if self.b5.isChecked():
             self.b5.setText(f"rectangle\n(size={self.custom_how*100:.0f}%)")
             self.set_how((self.custom_how, self.custom_how))
+            self.add_peek_cb()
 
     def set_layer_callback(self, l):
         if self.cid is not None:
@@ -522,12 +457,14 @@ class PeekLayerWidget(QtWidgets.QWidget):
         if l == "":
             return
 
-        self.cid = self.m.all.cb.click.attach.peek_layer(l, how=self._how)
+        self.cid = self.m.all.cb.click.attach.peek_layer(l, how=self._how, alpha=self.alphaslider.alpha)
         self.current_layer = l
 
     def set_how(self, how):
         self._how = how
 
+
+    def add_peek_cb(self):
         if self.current_layer is None:
             return
 
@@ -535,7 +472,41 @@ class PeekLayerWidget(QtWidgets.QWidget):
             self.m.all.cb.click.remove(self.cid)
             self.cid = None
 
-        self.cid = self.m.all.cb.click.attach.peek_layer(self.current_layer, how=self._how)
+        self.cid = self.m.all.cb.click.attach.peek_layer(self.current_layer, how=self._how, alpha=self.alphaslider.alpha)
+
+
+class NewWindowWidget(QtWidgets.QWidget):
+    def __init__(self, *args, **kwargs):
+        """
+        """
+        super().__init__(*args, **kwargs)
+
+        l0 = QtWidgets.QLabel("<b>Create a new Window:<b>")
+        b1 = QtWidgets.QPushButton("New Window")
+        b1.clicked.connect(self.new_window)
+        l1 = QtWidgets.QLabel("crs:")
+        self.t1 = InputCRS()
+        self.t1.setPlaceholderText("Maps.CRS.GOOGLE_MERCATOR")
+
+        new = QtWidgets.QGridLayout()
+
+        new.addWidget(l0, 0, 0, 1, 2, Qt.AlignBottom)
+        new.addWidget(l1, 1, 0, Qt.AlignVCenter)
+        new.addWidget(self.t1, 1, 1,Qt.AlignBottom)
+        new.addWidget(b1, 1, 2, Qt.AlignRight)
+
+        self.setLayout(new)
+
+    def new_window(self):
+        try:
+            from .app import MainWindow
+            MainWindow(crs=get_crs(self.t1.text()))
+        except Exception:
+            import traceback
+            show_error_popup(
+                text="There was an error while trying to open a new window!",
+                title="Error",
+                details=traceback.format_exc())
 
 
 class ShowLayerWidget(QtWidgets.QWidget):
@@ -578,38 +549,24 @@ class ShowLayerWidget(QtWidgets.QWidget):
         width = label.fontMetrics().boundingRect(label.text()).width()
         label.setFixedWidth(width + 5)
 
+
+        wms = AddWMS(m = self.m)
+        wms.signal_layer_created.connect(self.update_dropdown)
+
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(wms)
+
         layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(label)
-        layout.addWidget(self.layerselector)
         layout.setAlignment(Qt.AlignTop)
 
-        l0 = QtWidgets.QLabel("<b>Create a new Window:<b>")
-        b1 = QtWidgets.QPushButton("New Window")
-        b1.clicked.connect(self.new_window)
-        l1 = QtWidgets.QLabel("<b>CRS:<b>")
-        self.t1 = InputCRS()
-        self.t1.setPlaceholderText("Maps.CRS.GOOGLE_MERCATOR")
+        layout.addWidget(label)
+        layout.addWidget(self.layerselector)
+        layout.addWidget(scroll)
 
-        new = QtWidgets.QGridLayout()
-
-        new.addWidget(l0, 0, 0, 1, 2)
-        new.addWidget(l1, 1, 0, Qt.AlignBottom)
-        new.addWidget(self.t1, 1, 1)
-        new.addWidget(b1, 2, 0, 1, 2, Qt.AlignRight)
-
-        layout.addStretch(10)
-        layout.addLayout(new)
-
-        addwms = AddWMS_OSM(m=self.m)
-        addwms.signal_layer_created.connect(self.update_dropdown)
-        layout.addWidget(addwms)
-
-
-        addwms = AddWMS_S1GBM(m=self.m)
-        addwms.signal_layer_created.connect(self.update_dropdown)
-        layout.addWidget(addwms)
 
         self.setLayout(layout)
+
 
     def update_dropdown(self, t):
         # make sure to re-fetch layers first
@@ -631,19 +588,8 @@ class ShowLayerWidget(QtWidgets.QWidget):
         try:
             self.m.show_layer(l)
         except Exception:
-            print("showing the layer '", l, "'did not work")
+            print(f"showing the layer '{l}' did not work")
 
-
-    def new_window(self):
-        try:
-            from .app import MainWindow
-            MainWindow(crs=get_crs(self.t1.text()))
-        except Exception:
-            import traceback
-            show_error_popup(
-                text="There was an error while trying to open a new window!",
-                title="Error",
-                details=traceback.format_exc())
 
 
 class ShowPeekLayerWidget(QtWidgets.QWidget):
@@ -661,13 +607,28 @@ class ShowPeekLayerWidget(QtWidgets.QWidget):
 
         tab1layout = QtWidgets.QHBoxLayout()
 
-        split = QtWidgets.QSplitter(Qt.Horizontal)
-
         show = ShowLayerWidget(parent=self.parent)
         peek = PeekLayerWidget(parent=self.parent)
+        new = NewWindowWidget()
 
-        split.addWidget(show)
-        split.addWidget(peek)
+
+        leftlayout = QtWidgets.QVBoxLayout()
+        leftlayout.addWidget(show)
+
+        rightlayout = QtWidgets.QVBoxLayout()
+        rightlayout.addWidget(peek)
+        rightlayout.addWidget(new)
+
+
+        left = QtWidgets.QWidget()
+        left.setLayout(leftlayout)
+
+        right = QtWidgets.QWidget()
+        right.setLayout(rightlayout)
+
+        split = QtWidgets.QSplitter(Qt.Horizontal)
+        split.addWidget(left)
+        split.addWidget(right)
 
         #split.setSizes((500, 200))
         tab1layout.addWidget(split)
@@ -1177,26 +1138,10 @@ class PlotNetCDFWidget(PlotFileWidget):
         super().__init__(*args, **kwargs)
 
         l = QtWidgets.QHBoxLayout()
-        self.x = QtWidgets.QLineEdit("x")
-        self.y = QtWidgets.QLineEdit("y")
-        self.parameter = QtWidgets.QLineEdit("param")
-        self.crs = QtWidgets.QLineEdit("4326")
         self.sel = QtWidgets.QLineEdit("")
 
-        tx = QtWidgets.QLabel("x:")
-        ty = QtWidgets.QLabel("y:")
-        tparam = QtWidgets.QLabel("parameter:")
-        tcrs = QtWidgets.QLabel("crs:")
         tsel = QtWidgets.QLabel("isel:")
 
-        l.addWidget(tx)
-        l.addWidget(self.x)
-        l.addWidget(ty)
-        l.addWidget(self.y)
-        l.addWidget(tparam)
-        l.addWidget(self.parameter)
-        l.addWidget(tcrs)
-        l.addWidget(self.crs)
 
         l.addWidget(tsel)
         l.addWidget(self.sel)
@@ -1204,8 +1149,6 @@ class PlotNetCDFWidget(PlotFileWidget):
         withtitle = QtWidgets.QWidget()
         withtitlelayout = QtWidgets.QVBoxLayout()
 
-        title = QtWidgets.QLabel("<b>Variables used for plotting:</b>")
-        withtitlelayout.addWidget(title)
         withtitlelayout.addLayout(l)
 
         withtitle.setLayout(withtitlelayout)
@@ -1421,7 +1364,6 @@ class OpenDataStartTab(QtWidgets.QWidget):
         layout.addWidget(b2, 1, 0)
         layout.addWidget(b3, 2, 0)
         layout.addWidget(t1, 3, 0)
-
 
         layout.setAlignment(Qt.AlignCenter)
         self.setLayout(layout)
