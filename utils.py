@@ -179,6 +179,86 @@ class AlphaSlider(QtWidgets.QSlider):
         self.alpha = i/100
 
 
+
+
+
+from PyQt5 import QtCore
+
+
+
+
+# TODO move to own class
+class AddWMS_S1GBM(QtWidgets.QWidget):
+    signal_layer_created = QtCore.Signal(str)
+    layer_prefix = "S1GBM_"
+
+    def __init__(self, *args, m, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.m = m
+
+        self.t = QtWidgets.QLabel("S1GBM:")
+        self.b = QtWidgets.QPushButton("Add")
+        self.b.clicked.connect(self.add_layer)
+
+        self.drop = QtWidgets.QComboBox()
+        for key in ["vv", "vh"]:
+            if key in ["m"] or key.startswith("_"):
+                continue
+
+            self.drop.addItem(key)
+
+        layout = QtWidgets.QHBoxLayout()
+        layout.addWidget(self.t)
+        layout.addWidget(self.drop)
+        layout.addWidget(self.b)
+
+        self.setLayout(layout)
+
+
+    def add_layer(self):
+        wmslayer = self.drop.currentText()
+        layer = self.layer_prefix + wmslayer
+        getattr(self.m.add_wms.S1GBM.add_layer, wmslayer)(layer=layer)
+        self.m.show_layer(layer)
+        self.signal_layer_created.emit(layer)
+
+
+class AddWMS_OSM(QtWidgets.QWidget):
+    signal_layer_created = QtCore.Signal(str)
+    layer_prefix = "OSM_"
+
+    def __init__(self, *args, m, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.m = m
+
+        self.t = QtWidgets.QLabel("OpenStreetMap:")
+        self.b = QtWidgets.QPushButton("Add")
+        self.b.clicked.connect(self.add_layer)
+
+        self.drop = QtWidgets.QComboBox()
+        for key in self.m.add_wms.OpenStreetMap.add_layer.__dict__.keys():
+            if key in ["m"] or key.startswith("_"):
+                continue
+
+            self.drop.addItem(key)
+
+        layout = QtWidgets.QHBoxLayout()
+        layout.addWidget(self.t)
+        layout.addWidget(self.drop)
+        layout.addWidget(self.b)
+
+        self.setLayout(layout)
+
+
+    def add_layer(self):
+        wmslayer = self.drop.currentText()
+        layer = self.layer_prefix + wmslayer
+        getattr(self.m.add_wms.OpenStreetMap.add_layer, wmslayer)(layer=layer)
+        self.m.show_layer(layer)
+        self.signal_layer_created.emit(layer)
+
+
+
 class DrawerWidget(QtWidgets.QWidget):
 
     _polynames = {
@@ -277,7 +357,9 @@ class AutoUpdateComboBox(QtWidgets.QComboBox):
         else:
             return [i for i in self.m._get_layers(exclude = self._exclude) if not str(i).startswith("_")]
 
+
     def update_layers(self):
+
         layers = self.layers
         if set(layers) == set(self.last_layers):
             return
@@ -294,8 +376,8 @@ class AutoUpdateComboBox(QtWidgets.QComboBox):
 
         if self._use_active:
             currindex = self.findText(str(self.m.BM.bg_layer))
-
             self.setCurrentIndex(currindex)
+
 
 class PeekLayerWidget(QtWidgets.QWidget):
 
@@ -456,8 +538,6 @@ class PeekLayerWidget(QtWidgets.QWidget):
         self.cid = self.m.all.cb.click.attach.peek_layer(self.current_layer, how=self._how)
 
 
-
-
 class ShowLayerWidget(QtWidgets.QWidget):
 
     def __init__(self, *args, parent=None, layers=None, exclude=None, **kwargs):
@@ -482,7 +562,6 @@ class ShowLayerWidget(QtWidgets.QWidget):
         """
         super().__init__(*args, **kwargs)
 
-
         self.parent = parent
         self._layers = layers
         self._exclude = exclude
@@ -504,8 +583,6 @@ class ShowLayerWidget(QtWidgets.QWidget):
         layout.addWidget(self.layerselector)
         layout.setAlignment(Qt.AlignTop)
 
-
-
         l0 = QtWidgets.QLabel("<b>Create a new Window:<b>")
         b1 = QtWidgets.QPushButton("New Window")
         b1.clicked.connect(self.new_window)
@@ -522,14 +599,35 @@ class ShowLayerWidget(QtWidgets.QWidget):
 
         layout.addStretch(10)
         layout.addLayout(new)
+
+        addwms = AddWMS_OSM(m=self.m)
+        addwms.signal_layer_created.connect(self.update_dropdown)
+        layout.addWidget(addwms)
+
+
+        addwms = AddWMS_S1GBM(m=self.m)
+        addwms.signal_layer_created.connect(self.update_dropdown)
+        layout.addWidget(addwms)
+
         self.setLayout(layout)
+
+    def update_dropdown(self, t):
+        # make sure to re-fetch layers first
+        self.layerselector.update_layers()
+
+        currindex = self.layerselector.findText(t)
+        self.layerselector.setCurrentIndex(currindex)
 
 
     @property
     def m(self):
         return self.parent.m
 
+
     def set_layer_callback(self, l):
+        if l == "":
+            return
+
         try:
             self.m.show_layer(l)
         except Exception:
