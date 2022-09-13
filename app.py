@@ -68,6 +68,9 @@ class MainWindow(EOmapsWindow):
         self.split_top.addWidget(self.toolbar)
         self.split_top.addWidget(menu_widget)
 
+        self.split_top.setSizes([1000, 1, 10])
+
+        self.resize(1200,900)
         self.show()
 
     @property
