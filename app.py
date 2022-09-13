@@ -53,7 +53,7 @@ class MainWindow(EOmapsWindow):
     def __init__(self, *args, crs=None, m=None, **kwargs):
         # Create the maptlotlib FigureCanvas object,
         # which defines a single set of axes as self.axes.
-        canvas = MyMap(self, width=10, height=10, dpi=72, crs=crs, m=m)
+        canvas = MyMap(self, width=12, height=8, dpi=72, crs=crs, m=m)
 
         super().__init__(eomaps_canvas = canvas, *args, **kwargs)
         self.setWindowTitle("EOmaps QT embedding example")

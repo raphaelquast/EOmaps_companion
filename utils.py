@@ -1,9 +1,86 @@
 from PyQt5 import QtWidgets, QtGui
-from PyQt5.QtCore import Qt, QRectF
+from PyQt5.QtCore import Qt, QRectF, QSize, QLocale, QEvent
 from pathlib import Path
 
 from .base import ResizableWindow
-from .wms_utils import AddWMS
+from .layer import LayerEditor
+
+
+import matplotlib.pyplot as plt
+
+
+class LineEditComplete(QtWidgets.QLineEdit):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._options = None
+
+        self.installEventFilter(self)
+
+    def set_complete_vals(self, options):
+        self._options = options
+        completer = QtWidgets.QCompleter(self._options)
+        self.setCompleter(completer)
+
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        if self._options is not None:
+            # set the completion-prefix to ensure all options are shown
+            self.completer().setCompletionPrefix("")
+            self.completer().complete()
+
+
+class InputCRS(LineEditComplete):
+    def __init__(self, *args, **kwargs):
+        """
+        A QtWidgets.QLineEdit widget with autocompletion for available CRS
+        """
+        super().__init__(*args,**kwargs)
+        from eomaps import Maps
+
+        crs_options = ["Maps.CRS." + key for key, val in Maps.CRS.__dict__.items()
+                       if not key.startswith("_")
+                       and (isinstance(val, Maps.CRS.ABCMeta)
+                            or isinstance(val, Maps.CRS.CRS))]
+        self.set_complete_vals(crs_options)
+        self.setPlaceholderText("4326")
+
+    def text(self):
+        t = super().text()
+        if len(t) == 0:
+            return self.placeholderText()
+        else:
+            return t
+
+
+class CmapDropdown(QtWidgets.QComboBox):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.setIconSize(QSize(100, 15))
+
+        cmaps = plt.cm._colormaps()
+
+        self.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        for cmap in sorted(cmaps):
+            pixmap = QtGui.QPixmap()
+            pixmap.loadFromData(getattr(plt.cm, cmap)._repr_png_(), "png")
+            label = QtGui.QIcon()
+            label.addPixmap(pixmap, QtGui.QIcon.Normal, QtGui.QIcon.On)
+            label.addPixmap(pixmap, QtGui.QIcon.Normal, QtGui.QIcon.Off)
+            label.addPixmap(pixmap, QtGui.QIcon.Disabled, QtGui.QIcon.On)
+            label.addPixmap(pixmap, QtGui.QIcon.Disabled, QtGui.QIcon.Off)
+
+
+            self.addItem(label, cmap)
+
+        self.setStyleSheet("combobox-popup: 0;");
+        self.setMaxVisibleItems(10)
+
+        idx = self.findText("viridis")
+        self.setCurrentIndex(idx)
+
 
 
 class GetColorWidget(QtWidgets.QWidget):
@@ -252,7 +329,7 @@ class DrawerWidget(QtWidgets.QWidget):
     def m(self):
         return self.parent.m
 
-class AutoUpdateComboBox(QtWidgets.QComboBox):
+class AutoUpdateLayerDropdown(QtWidgets.QComboBox):
     def __init__(self, *args, m=None, layers=None, exclude=None, use_active=False, empty_ok=True, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -264,6 +341,17 @@ class AutoUpdateComboBox(QtWidgets.QComboBox):
 
         self.last_layers = []
 
+        # update layers on every change of the Maps-object background layer
+        self.m.BM.on_layer(self.update_visible_layer, persistent=True)
+        self.update_layers()
+
+    def update_visible_layer(self, m, l):
+        # make sure to re-fetch layers first
+        self.update_layers()
+
+        if self._use_active:
+            currindex = self.findText(l)
+            self.setCurrentIndex(currindex)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
@@ -280,15 +368,13 @@ class AutoUpdateComboBox(QtWidgets.QComboBox):
         else:
             return [i for i in self.m._get_layers(exclude = self._exclude) if not str(i).startswith("_")]
 
-
     def update_layers(self):
-        print("updating layers")
         layers = self.layers
         if set(layers) == set(self.last_layers):
             return
-        else:
-            self.last_layers = layers
 
+
+        self.last_layers = layers
         self.clear()
 
         if self._empty_ok:
@@ -333,7 +419,7 @@ class PeekLayerWidget(QtWidgets.QWidget):
         self.cid = None
         self.current_layer = None
 
-        self.layerselector = AutoUpdateComboBox(m=self.m, layers=layers, exclude=exclude)
+        self.layerselector = AutoUpdateLayerDropdown(m=self.m, layers=layers, exclude=exclude)
         self.layerselector.update_layers() # do this before attaching the callback!
         self.layerselector.currentIndexChanged[str].connect(self.set_layer_callback)
 
@@ -537,23 +623,13 @@ class ShowLayerWidget(QtWidgets.QWidget):
 
         self.cid = None
 
-        self.layerselector = AutoUpdateComboBox(m=self.m, layers=layers, exclude=exclude, use_active=True, empty_ok=False)
-        # do this before attaching the callback to avoid fetching unnecessary layers!
-        self.layerselector.update_layers()
-        self.layerselector.currentIndexChanged[str].connect(self.set_layer_callback)
+        self.layerselector = AutoUpdateLayerDropdown(m=self.m, layers=layers, exclude=exclude, use_active=True, empty_ok=False)
+        self.layerselector.activated[str].connect(self.set_layer_callback)
 
 
         label = QtWidgets.QLabel("<b>Visible layer:</b>")
         width = label.fontMetrics().boundingRect(label.text()).width()
         label.setFixedWidth(width + 5)
-
-
-        wms = AddWMS(m = self.m)
-        wms.signal_layer_created.connect(self.update_dropdown)
-
-        scroll = QtWidgets.QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(wms)
 
         layout = QtWidgets.QVBoxLayout()
         layout.setAlignment(Qt.AlignTop)
@@ -563,19 +639,12 @@ class ShowLayerWidget(QtWidgets.QWidget):
         vis_layer_layout.addWidget(self.layerselector)
 
         layout.addLayout(vis_layer_layout)
-        layout.addWidget(scroll)
 
+        new = NewWindowWidget()
+        layout.addStretch(10)
+        layout.addWidget(new)
 
         self.setLayout(layout)
-
-
-    def update_dropdown(self, t):
-        # make sure to re-fetch layers first
-        self.layerselector.update_layers()
-
-        currindex = self.layerselector.findText(t)
-        self.layerselector.setCurrentIndex(currindex)
-
 
     @property
     def m(self):
@@ -583,6 +652,7 @@ class ShowLayerWidget(QtWidgets.QWidget):
 
 
     def set_layer_callback(self, l):
+        print("showlayer cb", l)
         if l == "":
             return
 
@@ -773,6 +843,7 @@ class ShapeSelector(QtWidgets.QWidget):
                 self.clear_item(layout.itemAt(i))
 
 
+
 class PlotFileWidget(QtWidgets.QWidget):
 
     file_endings = None
@@ -843,12 +914,39 @@ class PlotFileWidget(QtWidgets.QWidget):
         layername.addWidget(self.t1)
         self.setlayername.setLayout(layername)
 
+        self.cmaps = CmapDropdown()
+
+        validator = QtGui.QDoubleValidator()
+        # make sure the validator uses . as separator
+        validator.setLocale(QLocale("en_US"))
+
+        vminlabel = QtWidgets.QLabel("vmin=")
+        self.vmin = QtWidgets.QLineEdit()
+        self.vmin.setValidator(validator)
+        vmaxlabel = QtWidgets.QLabel("vmax=")
+        self.vmax = QtWidgets.QLineEdit()
+        self.vmax.setValidator(validator)
+
+        minmaxupdate = QtWidgets.QPushButton("🗘")
+        minmaxupdate.clicked.connect(self.do_update_vals)
+
+        minmaxlayout = QtWidgets.QHBoxLayout()
+        minmaxlayout.setAlignment(Qt.AlignLeft)
+        minmaxlayout.addWidget(vminlabel)
+        minmaxlayout.addWidget(self.vmin)
+        minmaxlayout.addWidget(vmaxlabel)
+        minmaxlayout.addWidget(self.vmax)
+        minmaxlayout.addWidget(minmaxupdate, Qt.AlignRight)
+
 
         options = QtWidgets.QVBoxLayout()
         options.addWidget(self.cb1)
         options.addWidget(self.cb2)
         options.addWidget(self.setlayername)
         options.addWidget(self.shape_selector)
+        options.addWidget(self.cmaps)
+        options.addLayout(minmaxlayout)
+
         optionwidget = QtWidgets.QWidget()
         optionwidget.setLayout(options)
 
@@ -859,7 +957,6 @@ class PlotFileWidget(QtWidgets.QWidget):
         optionscroll.setWidget(optionwidget)
 
         options_split = QtWidgets.QSplitter(Qt.Horizontal)
-
         options_split.addWidget(scroll)
         options_split.addWidget(optionscroll)
         options_split.setSizes((500, 300))
@@ -867,9 +964,11 @@ class PlotFileWidget(QtWidgets.QWidget):
         self.options_layout = QtWidgets.QHBoxLayout()
         self.options_layout.addWidget(options_split)
 
-        self.x = QtWidgets.QLineEdit("x")
-        self.y = QtWidgets.QLineEdit("y")
-        self.parameter = QtWidgets.QLineEdit("param")
+        self.x = LineEditComplete("x")
+        self.y = LineEditComplete("y")
+        self.parameter = LineEditComplete("param")
+
+
         self.crs = InputCRS()
 
         tx = QtWidgets.QLabel("x:")
@@ -900,7 +999,6 @@ class PlotFileWidget(QtWidgets.QWidget):
         self.layout.addLayout(withtitle)
 
         self.setLayout(self.layout)
-
 
     @property
     def m(self):
@@ -990,7 +1088,7 @@ class PlotFileWidget(QtWidgets.QWidget):
                 text="There was an error while trying to plot the data!",
                 title="Error",
                 details=traceback.format_exc())
-
+            return
         if self.close_on_plot:
             self.window.close()
 
@@ -1007,6 +1105,8 @@ class PlotFileWidget(QtWidgets.QWidget):
     def do_plot_file(self):
         self.file_info.setText("Implement `.do_plot_file()` to plot the data!")
 
+    def do_update_vals(self):
+        return
 
     def attach_as_tab(self):
         if self.tab is None:
@@ -1033,7 +1133,10 @@ class PlotFileWidget(QtWidgets.QWidget):
         self.y.setReadOnly(True)
         self.parameter.setReadOnly(True)
         self.crs.setReadOnly(True)
+        self.vmin.setReadOnly(True)
+        self.vmax.setReadOnly(True)
 
+        self.cmaps.setEnabled(False)
         self.shape_selector.setEnabled(False)
         self.setlayername.setEnabled(False)
         self.b_plot.close()
@@ -1056,6 +1159,12 @@ def show_error_popup(text=None, info=None, title=None, details=None):
    msg.exec_()
 
 
+def to_float_none(s):
+    if len(s) > 0:
+        return float(s.replace(",", "."))
+    else:
+        return None
+
 
 class PlotGeoTIFFWidget(PlotFileWidget):
 
@@ -1071,11 +1180,21 @@ class PlotGeoTIFFWidget(PlotFileWidget):
             info = io.StringIO()
             f.info(info)
 
+            coords = list(f.coords)
+            variables = list(f.variables)
+
             self.crs.setText(f.rio.crs.to_string())
-            self.parameter.setText(next((i for i in f.variables if i not in f.coords)))
+            self.parameter.setText(next((i for i in variables if i not in coords)))
+
 
         self.x.setText("x")
         self.y.setText("y")
+
+        # set values for autocompletion
+        cols = sorted(set(variables + coords))
+        self.x.set_complete_vals(cols)
+        self.y.set_complete_vals(cols)
+        self.parameter.set_complete_vals(cols)
 
 
         return file_path, info.getvalue()
@@ -1089,7 +1208,10 @@ class PlotGeoTIFFWidget(PlotFileWidget):
             self.file_path,
             shape=self.shape_selector.shape_args,
             coastline=False,
-            layer=self.get_layer()
+            layer=self.get_layer(),
+            cmap=self.cmaps.currentText(),
+            vmin=to_float_none(self.vmin.text()),
+            vmax=to_float_none(self.vmax.text()),
             )
 
         m2.cb.pick.attach.annotate(modifier=1)
@@ -1099,6 +1221,24 @@ class PlotGeoTIFFWidget(PlotFileWidget):
         self.m2 = m2
         # check if we want to add an annotation
         self.b_add_annotate_cb()
+
+    def do_update_vals(self):
+        import xarray as xar
+
+        try:
+            with xar.open_dataset(self.file_path) as f:
+                vmin = f[self.parameter.text()].min()
+                vmax = f[self.parameter.text()].max()
+
+                self.vmin.setText(str(float(vmin)))
+                self.vmax.setText(str(float(vmax)))
+
+        except Exception:
+            import traceback
+            show_error_popup(
+                text="There was an error while trying to update the values.",
+                title="Unable to update values.",
+                details=traceback.format_exc())
 
 
 
@@ -1192,7 +1332,38 @@ class PlotNetCDFWidget(PlotFileWidget):
 
             self.parameter.setText(next((i for i in variables if i not in coords)))
 
+            # set values for autocompletion
+            cols = sorted(set(variables + coords))
+            self.x.set_complete_vals(cols)
+            self.y.set_complete_vals(cols)
+            self.parameter.set_complete_vals(cols)
+
         return file_path, info.getvalue()
+
+
+    def do_update_vals(self):
+        import xarray as xar
+
+        try:
+            with xar.open_dataset(self.file_path) as f:
+                isel = self.get_sel()
+                if isel is not None:
+                    vmin = f.isel(**isel)[self.parameter.text()].min()
+                    vmax = f.isel(**isel)[self.parameter.text()].max()
+                else:
+                    vmin = f[self.parameter.text()].min()
+                    vmax = f[self.parameter.text()].max()
+
+                self.vmin.setText(str(float(vmin)))
+                self.vmax.setText(str(float(vmax)))
+
+        except Exception:
+            import traceback
+            show_error_popup(
+                text="There was an error while trying to update the values.",
+                title="Unable to update values.",
+                details=traceback.format_exc())
+
 
 
     def do_plot_file(self):
@@ -1207,7 +1378,10 @@ class PlotNetCDFWidget(PlotFileWidget):
             coords=(self.x.text(), self.y.text()),
             parameter=self.parameter.text(),
             data_crs=self.get_crs(),
-            isel=self.get_sel()
+            isel=self.get_sel(),
+            cmap=self.cmaps.currentText(),
+            vmin=to_float_none(self.vmin.text()),
+            vmax=to_float_none(self.vmax.text()),
             )
 
         m2.cb.pick.attach.annotate(modifier=1)
@@ -1218,30 +1392,6 @@ class PlotNetCDFWidget(PlotFileWidget):
         # check if we want to add an annotation
         self.b_add_annotate_cb()
 
-
-class InputCRS(QtWidgets.QLineEdit):
-    def __init__(self, *args, **kwargs):
-        """
-        A QtWidgets.QLineEdit widget with autocompletion for available CRS
-        """
-        super().__init__(*args,**kwargs)
-        from eomaps import Maps
-
-        crs_options = ["Maps.CRS." + key for key, val in Maps.CRS.__dict__.items()
-                       if not key.startswith("_")
-                       and (isinstance(val, Maps.CRS.ABCMeta)
-                            or isinstance(val, Maps.CRS.CRS))]
-        completer = QtWidgets.QCompleter(crs_options)
-        self.setCompleter(completer)
-
-        self.setPlaceholderText("4326")
-
-    def text(self):
-        t = super().text()
-        if len(t) == 0:
-            return self.placeholderText()
-        else:
-            return t
 
 class PlotCSVWidget(PlotFileWidget):
 
@@ -1262,10 +1412,22 @@ class PlotCSVWidget(PlotFileWidget):
         file_path = Path(QtWidgets.QFileDialog.getOpenFileName()[0])
 
         head = pd.read_csv(file_path, nrows=50)
+        cols = head.columns
 
-        self.x.setText(head.columns[0])
-        self.y.setText(head.columns[1])
-        self.parameter.setText(head.columns[2])
+        # set values for autocompletion
+        self.x.set_complete_vals(cols)
+        self.y.set_complete_vals(cols)
+        self.parameter.set_complete_vals(cols)
+
+
+        if len(cols) == 3:
+            self.x.setText(cols[0])
+            self.y.setText(cols[1])
+            self.parameter.setText(cols[2])
+        if len(cols) > 3:
+            self.x.setText(cols[1])
+            self.y.setText(cols[2])
+            self.parameter.setText(cols[3])
 
         return file_path, head.__repr__()
 
@@ -1283,6 +1445,9 @@ class PlotCSVWidget(PlotFileWidget):
             x=self.x.text(),
             y=self.y.text(),
             data_crs=self.get_crs(),
+            cmap=self.cmaps.currentText(),
+            vmin=to_float_none(self.vmin.text()),
+            vmax=to_float_none(self.vmax.text()),
             )
 
         m2.show_layer(m2.layer)
@@ -1446,7 +1611,8 @@ class SaveFileWidget(QtWidgets.QWidget):
         res = QtWidgets.QHBoxLayout()
         l1 = QtWidgets.QLabel("DPI:")
         self.dpi_input = QtWidgets.QLineEdit()
-        self.dpi_input.setInputMask("00000")
+        validator = QtGui.QIntValidator()
+        self.dpi_input.setValidator(validator)
         self.dpi_input.setText("200")
 
         res.addWidget(l1)
@@ -1458,10 +1624,6 @@ class SaveFileWidget(QtWidgets.QWidget):
         layout.addLayout(res, 0, 0, 1, 2)
         layout.addWidget(b_edit, 1, 0)
         layout.addWidget(b1, 1, 1)
-
-        new = NewWindowWidget()
-        layout.addWidget(new, 2, 0)
-
 
         layout.setAlignment(Qt.AlignCenter)
         self.setLayout(layout)
@@ -1491,8 +1653,10 @@ class ControlTabs(QtWidgets.QTabWidget):
         self.tab3 = DrawerWidget(parent=self.parent)
         self.tab4 = SaveFileWidget(parent=self.parent)
 
+        self.tab5 = LayerEditor(m = self.m)
 
-        self.addTab(self.tab1, "Layers")
+        self.addTab(self.tab1, "Compare")
+        self.addTab(self.tab5, "Edit")
         self.addTab(self.tab2, "Open")
         self.addTab(self.tab3, "Draw")
         self.addTab(self.tab4, "Save")
