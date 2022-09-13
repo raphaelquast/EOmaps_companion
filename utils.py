@@ -345,22 +345,20 @@ class PeekLayerWidget(QtWidgets.QWidget):
         dropdown.addWidget(label)
         dropdown.addWidget(self.layerselector)
 
-        self.b1 = QtWidgets.QRadioButton("top")
+        self.b1 = QtWidgets.QRadioButton("🡇")
         self.b1.toggled.connect(self.bcb1)
-        self.b1.setMaximumWidth(100)
 
-        self.b2 = QtWidgets.QRadioButton("bottom")
+        self.b2 = QtWidgets.QRadioButton("🡅")
         self.b2.toggled.connect(self.bcb2)
 
-        self.b3 = QtWidgets.QRadioButton("left")
+        self.b3 = QtWidgets.QRadioButton("🡆")
         self.b3.toggled.connect(self.bcb3)
 
-        self.b4 = QtWidgets.QRadioButton("right")
+        self.b4 = QtWidgets.QRadioButton("🡄")
         self.b4.toggled.connect(self.bcb4)
 
         self.b5 = QtWidgets.QRadioButton(f"rectangle\n(size={self.custom_how*100:.0f}%)")
         self.b5.toggled.connect(self.bcb5)
-        self.b5.setMaximumWidth(100)
         self.b5.setChecked(True)
 
 
@@ -395,13 +393,13 @@ class PeekLayerWidget(QtWidgets.QWidget):
         custom_how_layout.addWidget(self.b5)
         custom_how_layout.addWidget(self.slider)
 
-        buttons = QtWidgets.QGridLayout()
-        buttons.addLayout(custom_how_layout, 0, 0, 1, 2, Qt.AlignLeft)
-        buttons.addWidget(self.b1, 1, 0)
-        buttons.addWidget(self.b2, 1, 1)
-        buttons.addWidget(self.b3, 2, 0)
-        buttons.addWidget(self.b4, 2, 1)
-        buttons.setAlignment(Qt.AlignTop)
+        buttons = QtWidgets.QHBoxLayout()
+        buttons.addLayout(custom_how_layout)
+        buttons.addWidget(self.b3)
+        buttons.addWidget(self.b1)
+        buttons.addWidget(self.b2)
+        buttons.addWidget(self.b4)
+        #buttons.setAlignment(Qt.AlignTop|Qt.AlignRight)
 
 
         layout = QtWidgets.QVBoxLayout()
@@ -545,7 +543,7 @@ class ShowLayerWidget(QtWidgets.QWidget):
         self.layerselector.currentIndexChanged[str].connect(self.set_layer_callback)
 
 
-        label = QtWidgets.QLabel("<b>Show layer:</b>")
+        label = QtWidgets.QLabel("<b>Visible layer:</b>")
         width = label.fontMetrics().boundingRect(label.text()).width()
         label.setFixedWidth(width + 5)
 
@@ -560,8 +558,11 @@ class ShowLayerWidget(QtWidgets.QWidget):
         layout = QtWidgets.QVBoxLayout()
         layout.setAlignment(Qt.AlignTop)
 
-        layout.addWidget(label)
-        layout.addWidget(self.layerselector)
+        vis_layer_layout = QtWidgets.QHBoxLayout()
+        vis_layer_layout.addWidget(label)
+        vis_layer_layout.addWidget(self.layerselector)
+
+        layout.addLayout(vis_layer_layout)
         layout.addWidget(scroll)
 
 
@@ -609,7 +610,6 @@ class ShowPeekLayerWidget(QtWidgets.QWidget):
 
         show = ShowLayerWidget(parent=self.parent)
         peek = PeekLayerWidget(parent=self.parent)
-        new = NewWindowWidget()
 
 
         leftlayout = QtWidgets.QVBoxLayout()
@@ -617,7 +617,6 @@ class ShowPeekLayerWidget(QtWidgets.QWidget):
 
         rightlayout = QtWidgets.QVBoxLayout()
         rightlayout.addWidget(peek)
-        rightlayout.addWidget(new)
 
 
         left = QtWidgets.QWidget()
@@ -1459,6 +1458,10 @@ class SaveFileWidget(QtWidgets.QWidget):
         layout.addLayout(res, 0, 0, 1, 2)
         layout.addWidget(b_edit, 1, 0)
         layout.addWidget(b1, 1, 1)
+
+        new = NewWindowWidget()
+        layout.addWidget(new, 2, 0)
+
 
         layout.setAlignment(Qt.AlignCenter)
         self.setLayout(layout)
