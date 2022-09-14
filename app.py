@@ -70,8 +70,8 @@ class MainWindow(EOmapsWindow):
 
         self.split_top.setSizes([1000, 1, 10])
 
-        self.resize(1200,900)
         self.show()
+        self.resize(1200,900)
 
     @property
     def m(self):

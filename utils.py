@@ -1089,6 +1089,7 @@ class PlotFileWidget(QtWidgets.QWidget):
                 title="Error",
                 details=traceback.format_exc())
             return
+
         if self.close_on_plot:
             self.window.close()
 
@@ -1458,6 +1459,26 @@ class PlotCSVWidget(PlotFileWidget):
         self.b_add_annotate_cb()
 
 
+    def do_update_vals(self):
+        try:
+            import pandas as pd
+            df = pd.read_csv(self.file_path)
+
+            vmin = df[self.parameter.text()].min()
+            vmax = df[self.parameter.text()].max()
+
+            self.vmin.setText(str(float(vmin)))
+            self.vmax.setText(str(float(vmax)))
+
+        except Exception:
+            import traceback
+            show_error_popup(
+                text="There was an error while trying to update the values.",
+                title="Unable to update values.",
+                details=traceback.format_exc())
+
+
+
 
 from . import base
 class NewWindow(ResizableWindow):
@@ -1565,22 +1586,21 @@ class OpenDataStartTab(QtWidgets.QWidget):
                     title="Unable to open file.",
                     details=traceback.format_exc())
 
-
             return
 
-            if t.file_path is not None:
-                name = t.file_path.stem
-            else:
-                return
+            # if t.file_path is not None:
+            #     name = t.file_path.stem
+            # else:
+            #     return
 
-            if len(name) > 10:
-                name = name[:7] + "..."
-            self.tab.addTab(t, name)
+            # if len(name) > 10:
+            #     name = name[:7] + "..."
+            # self.tab.addTab(t, name)
 
-            tabindex = self.tab.indexOf(t)
+            # tabindex = self.tab.indexOf(t)
 
-            self.tab.setCurrentIndex(tabindex)
-            self.tab.setTabToolTip(tabindex, str(t.file_path))
+            # self.tab.setCurrentIndex(tabindex)
+            # self.tab.setTabToolTip(tabindex, str(t.file_path))
 
 
 class OpenFileTabs(QtWidgets.QTabWidget):
