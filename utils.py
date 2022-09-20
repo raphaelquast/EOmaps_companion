@@ -595,7 +595,7 @@ class NewWindowWidget(QtWidgets.QWidget):
 
 class ShowLayerWidget(QtWidgets.QWidget):
 
-    def __init__(self, *args, parent=None, layers=None, exclude=None, **kwargs):
+    def __init__(self, *args, m=None, layers=None, exclude=None, **kwargs):
         """
         A dropdown-list to change the base-layer of the map
 
@@ -617,7 +617,7 @@ class ShowLayerWidget(QtWidgets.QWidget):
         """
         super().__init__(*args, **kwargs)
 
-        self.parent = parent
+        self.m = m
         self._layers = layers
         self._exclude = exclude
 
@@ -627,9 +627,9 @@ class ShowLayerWidget(QtWidgets.QWidget):
         self.layerselector.activated[str].connect(self.set_layer_callback)
 
 
-        label = QtWidgets.QLabel("<b>Visible layer:</b>")
-        width = label.fontMetrics().boundingRect(label.text()).width()
-        label.setFixedWidth(width + 5)
+        label = QtWidgets.QLabel("<b>Active layer:</b>")
+        #width = label.fontMetrics().boundingRect(label.text()).width()
+        #label.setFixedWidth(width + 2)
 
         layout = QtWidgets.QVBoxLayout()
         layout.setAlignment(Qt.AlignTop)
@@ -637,18 +637,10 @@ class ShowLayerWidget(QtWidgets.QWidget):
         vis_layer_layout = QtWidgets.QHBoxLayout()
         vis_layer_layout.addWidget(label)
         vis_layer_layout.addWidget(self.layerselector)
-
+        vis_layer_layout.setAlignment(Qt.AlignRight)
         layout.addLayout(vis_layer_layout)
 
-        new = NewWindowWidget()
-        layout.addStretch(10)
-        layout.addWidget(new)
-
         self.setLayout(layout)
-
-    @property
-    def m(self):
-        return self.parent.m
 
 
     def set_layer_callback(self, l):
@@ -676,9 +668,16 @@ class ShowPeekLayerWidget(QtWidgets.QWidget):
         super().__init__(*args, **kwargs)
         self.parent = parent
 
-        tab1layout = QtWidgets.QHBoxLayout()
+        layout = QtWidgets.QHBoxLayout()
 
-        show = ShowLayerWidget(parent=self.parent)
+        #show = ShowLayerWidget(m=self.m)
+
+        show = LayerEditor(m = self.m)
+
+        new = NewWindowWidget()
+        show.layout().addStretch(10)
+        show.layout().addWidget(new)
+
         peek = PeekLayerWidget(parent=self.parent)
 
 
@@ -699,10 +698,11 @@ class ShowPeekLayerWidget(QtWidgets.QWidget):
         split.addWidget(left)
         split.addWidget(right)
 
-        #split.setSizes((500, 200))
-        tab1layout.addWidget(split)
 
-        self.setLayout(tab1layout)
+        #split.setSizes((500, 200))
+        layout.addWidget(split)
+
+        self.setLayout(layout)
 
     @property
     def m(self):
@@ -1550,6 +1550,7 @@ class OpenDataStartTab(QtWidgets.QWidget):
         layout.addWidget(b3, 2, 0)
         layout.addWidget(t1, 3, 0)
 
+
         layout.setAlignment(Qt.AlignCenter)
         self.setLayout(layout)
 
@@ -1675,10 +1676,9 @@ class ControlTabs(QtWidgets.QTabWidget):
 
         self.tab5 = LayerEditor(m = self.m)
 
-        self.addTab(self.tab1, "Compare")
-        self.addTab(self.tab5, "Edit")
-        self.addTab(self.tab2, "Open")
-        self.addTab(self.tab3, "Draw")
+        self.addTab(self.tab1, r"Edit || Compare")
+        self.addTab(self.tab2, "Open Files")
+        self.addTab(self.tab3, "Draw Shapes")
         self.addTab(self.tab4, "Save")
 
     @property

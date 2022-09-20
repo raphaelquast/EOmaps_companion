@@ -9,44 +9,43 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtCore import Qt
 
+import matplotlib.pyplot as plt
+plt.ioff()
+
 
 class MyMap(EOmapsCanvas):
     def __init__(self, *args, m=None, **kwargs):
         self._m = m
 
         super().__init__(*args, **kwargs)
+
     def setup_map(self, width, height, dpi, crs):
         if self._m is not None:
             return self._m
 
-        #print(self._m)
         # initialize EOmaps Maps object
         m = Maps(figsize=(width, height),
                  dpi=dpi,
                  crs=crs,
-                 #crs=Maps.CRS.Equi7Grid_projection("EU"),
-                 #crs = Maps.CRS.GOOGLE_MERCATOR,
                  layer="default")
 
         m.add_feature.preset.coastline()
 
         try:
             m.add_wms.OpenStreetMap.add_layer.default(layer="OSM")
-            m.add_wms.OpenStreetMap.add_layer.default(layer="OSM_05", alpha=0.5)
-
             m.add_wms.OpenStreetMap.add_layer.stamen_watercolor(layer="OSM watercolor")
             m.add_wms.ESA_WorldCover.add_layer.WORLDCOVER_2020_MAP(layer="ESA WorldCover")
+
         except Exception:
             print("WebMap layers could not be added...")
             pass
-        # m.add_feature.preset.ocean(layer="ocean")
-        # m.add_feature.preset.land(layer = "land")
 
         m.all.cb.click.attach.annotate(modifier=1)
 
         return m
 
 
+from PyQt5.QtWidgets import QDesktopWidget
 
 class MainWindow(EOmapsWindow):
 
@@ -60,18 +59,58 @@ class MainWindow(EOmapsWindow):
 
         tabs = utils.ControlTabs(parent=self)
 
-        menu_widget = QtWidgets.QWidget()
+        self.menu_widget = QtWidgets.QWidget()
         menu_layout = QtWidgets.QVBoxLayout()
-        menu_layout.addWidget(tabs)
-        menu_widget.setLayout(menu_layout)
 
-        self.split_top.addWidget(self.toolbar)
-        self.split_top.addWidget(menu_widget)
+        logo = QtGui.QPixmap("logo.png")
+        logolabel = QtWidgets.QLabel()
+        logolabel.setMaximumHeight(30)
+        logolabel.setAlignment(Qt.AlignBottom|Qt.AlignRight)
+        logolabel.setPixmap(logo.scaled(logolabel.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+        toolbarlayout = QtWidgets.QHBoxLayout()
+
+        from .utils import ShowLayerWidget
+        showlayer = ShowLayerWidget(m = self.m)
+        toolbarlayout.addWidget(self.toolbar)
+        toolbarlayout.addWidget(showlayer)
+        toolbarlayout.addWidget(logolabel)
+
+
+        menu_layout.addLayout(toolbarlayout)
+        menu_layout.addWidget(tabs)
+        self.menu_widget.setLayout(menu_layout)
+
+        menu_dock = QtWidgets.QDockWidget(flags=Qt.Window)
+        menu_dock.setFeatures(QtWidgets.QDockWidget.DockWidgetFloatable |
+                                     QtWidgets.QDockWidget.DockWidgetMovable)
+        menu_dock.setAllowedAreas(Qt.TopDockWidgetArea|Qt.BottomDockWidgetArea)
+        menu_dock.setWidget(self.menu_widget)
+        menu_dock.setTitleBarWidget(QtWidgets.QLabel(""))
+        #self.split_top.addWidget(self.toolbar)
+        #self.layout.addWidget(menu_widget)
+
+        # toolbardock = QtWidgets.QDockWidget()
+        # toolbardock.setWidget(self.toolbar)
+        # toolbardock.setFeatures(QtWidgets.QDockWidget.DockWidgetFloatable |
+        #                         QtWidgets.QDockWidget.DockWidgetMovable)
+
+
+        # self.addDockWidget(Qt.BottomDockWidgetArea, toolbardock)
+        self.addDockWidget(Qt.BottomDockWidgetArea, menu_dock)
 
         self.split_top.setSizes([1000, 1, 10])
 
         self.show()
         self.resize(1200,900)
+        self.center()
+        #menu_dock.setFloating(True)
+
+    def center(self):
+        qr = self.frameGeometry()
+        cp = QDesktopWidget().availableGeometry().center()
+        qr.moveCenter(cp)
+        self.move(qr.topLeft())
 
     @property
     def m(self):
@@ -80,7 +119,8 @@ class MainWindow(EOmapsWindow):
 
 def run(m=None):
     app = QtWidgets.QApplication(sys.argv)
-
+    logo = QtGui.QIcon("logo_rect.png")
+    app.setWindowIcon(logo)
     # Force the style to be the same on all OSs:
     app.setStyle("Fusion")
 

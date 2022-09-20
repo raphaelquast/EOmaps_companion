@@ -4,6 +4,7 @@ from .wms_utils import AddWMSMenuButton
 
 class LayerEditor(QtWidgets.QWidget):
     def __init__(self, *args, m=None, **kwargs):
+
         super().__init__(*args, **kwargs)
 
         self.m = m
@@ -15,23 +16,22 @@ class LayerEditor(QtWidgets.QWidget):
         new_layer_button.clicked.connect(self.new_layer)
 
         addfeature = AddFeaturesMenuButton(m=self.m)
-        addwms = AddWMSMenuButton(m=self.m)
+        try:
+            addwms = AddWMSMenuButton(m=self.m)
+        except:
+            addwms = QtWidgets.QPushButton("WMS services unavailable")
 
-        from .utils import AutoUpdateLayerDropdown, CmapDropdown
-
-        visiblelayer = AutoUpdateLayerDropdown(m=self.m, use_active=True, empty_ok=False)
-        visiblelayer.activated[str].connect(self.set_layer_callback)
 
         newlayer = QtWidgets.QHBoxLayout()
         newlayer.addWidget(self.new_layer_name)
         newlayer.addWidget(new_layer_button)
 
-        layout = QtWidgets.QGridLayout()
-        layout.addWidget(visiblelayer, 0, 0, 1, 2)
-        layout.addLayout(newlayer, 0, 2, 1, 2)
-        layout.addWidget(addfeature, 1, 0)
-        layout.addWidget(addwms, 1, 1)
-
+        layout = QtWidgets.QVBoxLayout()
+        layout.addLayout(newlayer)
+        buttons = QtWidgets.QHBoxLayout()
+        buttons.addWidget(addfeature)
+        buttons.addWidget(addwms)
+        layout.addLayout(buttons)
 
         self.setLayout(layout)
 
@@ -45,15 +45,6 @@ class LayerEditor(QtWidgets.QWidget):
         self.m.show_layer(layer)
 
         return m2
-
-    def set_layer_callback(self, l):
-        if l == "":
-            return
-
-        try:
-            self.m.show_layer(l)
-        except Exception:
-            print(f"showing the layer '{l}' did not work")
 
 
 
@@ -72,16 +63,27 @@ class AddFeaturesMenuButton(QtWidgets.QPushButton):
         feature_menu.setStyleSheet("QMenu { menu-scrollable: 1;}")
 
         for featuretype in feature_types:
-            sub_menu = feature_menu.addMenu(featuretype)
+            try:
+                sub_menu = feature_menu.addMenu(featuretype)
 
-            sub_features = [i for i in dir(getattr(self.m.add_feature, featuretype)) if not i.startswith("_")]
-            for feature in sub_features:
-                action = sub_menu.addAction(str(feature))
-                action.triggered.connect(self.menu_callback_factory(featuretype, feature))
+                sub_features = [i for i in dir(getattr(self.m.add_feature, featuretype)) if not i.startswith("_")]
+                for feature in sub_features:
+                    action = sub_menu.addAction(str(feature))
+                    action.triggered.connect(self.menu_callback_factory(featuretype, feature))
+            except:
+                print("there was a problem with the NaturalEarth feature", featuretype)
+                continue
 
         self.setMenu(feature_menu)
         self.clicked.connect(lambda:feature_menu.popup(self.mapToGlobal(self.menu_button.pos())))
 
 
     def menu_callback_factory(self, featuretype, feature):
-        return lambda: getattr(getattr(self.m.add_feature, featuretype), feature)(layer = self.m.BM.bg_layer)
+        def cb():
+            try:
+                getattr(getattr(self.m.add_feature, featuretype), feature)(layer = self.m.BM.bg_layer)
+            except Exception:
+                print("adding the feature", featuretype, feature, "did not work")
+
+
+        return cb

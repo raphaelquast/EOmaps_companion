@@ -26,7 +26,7 @@ class ResizableWindow(QtWidgets.QMainWindow):
         self.catch_cursor = 0
         self.installEventFilter(self)
 
-        self.top_resize_margin = 20
+        self.top_resize_margin = 30
 
     def eventFilter(self, source, event):
         if event.type() == QtCore.QEvent.HoverMove:
@@ -53,7 +53,7 @@ class ResizableWindow(QtWidgets.QMainWindow):
                     # minimize the window and position it centered
                     self.showNormal()
                     self.move(self.press_pos)
-                    self.press_pos = QtCore.QPoint(self.sizeHint().width()/2, 0)
+                    self.press_pos = QtCore.QPoint(int(self.sizeHint().width()/2), 0)
                 else:
                     self.move(self.pos() + (event.pos() - self.press_pos))
 
@@ -339,24 +339,21 @@ class EOmapsWindow(ResizableWindow):
         # a container for nested layouts
 
         self.layout = QtWidgets.QVBoxLayout()
-        self.layout.setContentsMargins(5, 20, 5, 5)
+        self.layout.setContentsMargins(5, 5, 5, 5)
 
 
         self.split_top = MySplitter(Qt.Vertical, m=self.canvas.m)
 
         self.split_top.addWidget(self.toolbar)
         self.split_top.addWidget(self.canvas)
-
         self.layout.addWidget(self.split_top)
-
-
 
         # Create a placeholder widget to hold our toolbar and canvas.
         widget = QtWidgets.QWidget()
         widget.setLayout(self.layout)
         self.setCentralWidget(widget)
 
-
+        toolbar = QtWidgets.QToolBar()
         # a exit-button (add it as the last object to make sure it's on top)
         self.floatb = FloatingButtonWidget(self)
         self.floatb.setFixedSize(30, 30)
@@ -372,7 +369,13 @@ class EOmapsWindow(ResizableWindow):
         self.floatb2.clicked.connect(self.maximize_button_callback)
         self.floatb2.paddingLeft = 30
 
+        toolbar.addWidget(self.floatb)
+        toolbar.addWidget(self.floatb2)
 
+        toolbar.setFloatable(False)
+        toolbar.setMovable(False)
+
+        self.addToolBar(toolbar)
 
     def resizeEvent(self, event): #2
         super().resizeEvent(event)
