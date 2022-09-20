@@ -345,6 +345,8 @@ class AutoUpdateLayerDropdown(QtWidgets.QComboBox):
         self.m.BM.on_layer(self.update_visible_layer, persistent=True)
         self.update_layers()
 
+        self.setSizeAdjustPolicy(self.AdjustToContents)
+
     def update_visible_layer(self, m, l):
         # make sure to re-fetch layers first
         self.update_layers()
@@ -447,6 +449,8 @@ class PeekLayerWidget(QtWidgets.QWidget):
         self.b5.toggled.connect(self.bcb5)
         self.b5.setChecked(True)
 
+        self.b6 = QtWidgets.QRadioButton("🞑")
+        self.b6.toggled.connect(self.bcb6)
 
 
         alphalabel = QtWidgets.QLabel("Transparency:")
@@ -485,6 +489,8 @@ class PeekLayerWidget(QtWidgets.QWidget):
         buttons.addWidget(self.b1)
         buttons.addWidget(self.b2)
         buttons.addWidget(self.b4)
+        buttons.addWidget(self.b6)
+
         #buttons.setAlignment(Qt.AlignTop|Qt.AlignRight)
 
 
@@ -530,6 +536,11 @@ class PeekLayerWidget(QtWidgets.QWidget):
         if self.b5.isChecked():
             self.b5.setText(f"rectangle\n(size={self.custom_how*100:.0f}%)")
             self.set_how((self.custom_how, self.custom_how))
+            self.add_peek_cb()
+
+    def bcb6(self):
+        if self.b6.isChecked():
+            self.set_how("full")
             self.add_peek_cb()
 
     def set_layer_callback(self, l):
@@ -631,16 +642,13 @@ class ShowLayerWidget(QtWidgets.QWidget):
         #width = label.fontMetrics().boundingRect(label.text()).width()
         #label.setFixedWidth(width + 2)
 
-        layout = QtWidgets.QVBoxLayout()
-        layout.setAlignment(Qt.AlignTop)
 
         vis_layer_layout = QtWidgets.QHBoxLayout()
         vis_layer_layout.addWidget(label)
         vis_layer_layout.addWidget(self.layerselector)
-        vis_layer_layout.setAlignment(Qt.AlignRight)
-        layout.addLayout(vis_layer_layout)
-
-        self.setLayout(layout)
+        vis_layer_layout.setAlignment(Qt.AlignRight|Qt.AlignTop)
+        vis_layer_layout.setContentsMargins(0,0,0,0)
+        self.setLayout(vis_layer_layout)
 
 
     def set_layer_callback(self, l):
@@ -1143,6 +1151,7 @@ class PlotFileWidget(QtWidgets.QWidget):
         self.b_plot.close()
 
 def show_error_popup(text=None, info=None, title=None, details=None):
+   global msg
    msg = QtWidgets.QMessageBox()
    msg.setIcon(QtWidgets.QMessageBox.Critical)
 
@@ -1156,8 +1165,8 @@ def show_error_popup(text=None, info=None, title=None, details=None):
        msg.setDetailedText(details)
 
    msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
-
-   msg.exec_()
+   msg.show()
+   #msg.exec_()
 
 
 def to_float_none(s):

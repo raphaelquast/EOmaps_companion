@@ -68,43 +68,48 @@ class MainWindow(EOmapsWindow):
         logolabel.setAlignment(Qt.AlignBottom|Qt.AlignRight)
         logolabel.setPixmap(logo.scaled(logolabel.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
-        toolbarlayout = QtWidgets.QHBoxLayout()
 
         from .utils import ShowLayerWidget
         showlayer = ShowLayerWidget(m = self.m)
-        toolbarlayout.addWidget(self.toolbar)
-        toolbarlayout.addWidget(showlayer)
-        toolbarlayout.addWidget(logolabel)
+        self.toolbar.addSeparator()
+        self.toolbar.addWidget(showlayer)
+        self.toolbar.addWidget(self.b_enlarge)
+        self.toolbar.addWidget(self.b_close)
+        self.toolbar.setAllowedAreas(Qt.TopToolBarArea|Qt.BottomToolBarArea)
+
+        self.addToolBar(self.toolbar)
+
+        tabs.setContentsMargins(5, 5, 5, 5)
 
 
-        menu_layout.addLayout(toolbarlayout)
         menu_layout.addWidget(tabs)
         self.menu_widget.setLayout(menu_layout)
 
-        menu_dock = QtWidgets.QDockWidget(flags=Qt.Window)
-        menu_dock.setFeatures(QtWidgets.QDockWidget.DockWidgetFloatable |
-                                     QtWidgets.QDockWidget.DockWidgetMovable)
-        menu_dock.setAllowedAreas(Qt.TopDockWidgetArea|Qt.BottomDockWidgetArea)
-        menu_dock.setWidget(self.menu_widget)
-        menu_dock.setTitleBarWidget(QtWidgets.QLabel(""))
-        #self.split_top.addWidget(self.toolbar)
-        #self.layout.addWidget(menu_widget)
+        self.menu_dock = QtWidgets.QDockWidget(flags=Qt.Window)
+        self.menu_dock.setFeatures(QtWidgets.QDockWidget.DockWidgetFloatable |
+                                   QtWidgets.QDockWidget.DockWidgetMovable)
+        self.menu_dock.setAllowedAreas(Qt.TopDockWidgetArea|Qt.BottomDockWidgetArea)
+        self.menu_dock.setWidget(self.menu_widget)
+        self.menu_dock.setTitleBarWidget(QtWidgets.QLabel(""))
 
-        # toolbardock = QtWidgets.QDockWidget()
-        # toolbardock.setWidget(self.toolbar)
-        # toolbardock.setFeatures(QtWidgets.QDockWidget.DockWidgetFloatable |
-        #                         QtWidgets.QDockWidget.DockWidgetMovable)
+        #self.addDockWidget(Qt.BottomDockWidgetArea, self.menu_dock)
 
+        menu_toolbar = QtWidgets.QDockWidget(flags=Qt.Window)
+        menu_toolbar.setFeatures(QtWidgets.QDockWidget.DockWidgetFloatable |
+                                   QtWidgets.QDockWidget.DockWidgetMovable)
+        menu_toolbar.setAllowedAreas(Qt.TopDockWidgetArea|Qt.BottomDockWidgetArea)
+        menu_toolbar.setWidget(self.menu_widget)
+        menu_toolbar.setTitleBarWidget(QtWidgets.QLabel(""))
 
-        # self.addDockWidget(Qt.BottomDockWidgetArea, toolbardock)
-        self.addDockWidget(Qt.BottomDockWidgetArea, menu_dock)
+        self.addDockWidget(Qt.BottomDockWidgetArea, menu_toolbar)
 
-        self.split_top.setSizes([1000, 1, 10])
 
         self.show()
         self.resize(1200,900)
         self.center()
         #menu_dock.setFloating(True)
+
+        #self.setStyleSheet("QMainWindow::separator {width: 1px; border: none;}")
 
     def center(self):
         qr = self.frameGeometry()
@@ -148,8 +153,8 @@ def run(m=None):
 
 
     w = MainWindow(m=m)
-
-    sys.exit(app.exec_())
+    w.show()
+    #sys.exit(app.exec_())
 
 
 if __name__ == "__main__":

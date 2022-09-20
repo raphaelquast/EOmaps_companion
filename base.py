@@ -332,8 +332,8 @@ class EOmapsWindow(ResizableWindow):
 
         # Create a matplotlib navigation-toolbar object for the map
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
-        self.toolbar.setMinimumHeight(30)
-        self.toolbar.setMaximumHeight(30)
+        self.toolbar.setMinimumHeight(32)
+        self.toolbar.setMaximumHeight(32)
 
         # -------------------------
         # a container for nested layouts
@@ -342,45 +342,66 @@ class EOmapsWindow(ResizableWindow):
         self.layout.setContentsMargins(5, 5, 5, 5)
 
 
-        self.split_top = MySplitter(Qt.Vertical, m=self.canvas.m)
+        #self.split_top = MySplitter(Qt.Vertical, m=self.canvas.m)
 
-        self.split_top.addWidget(self.toolbar)
-        self.split_top.addWidget(self.canvas)
-        self.layout.addWidget(self.split_top)
+        #self.split_top.addWidget(self.toolbar)
+        #self.split_top.addWidget(self.canvas)
+        #self.layout.addWidget(self.split_top)
+
+        self.layout.addWidget(self.canvas)
 
         # Create a placeholder widget to hold our toolbar and canvas.
         widget = QtWidgets.QWidget()
         widget.setLayout(self.layout)
         self.setCentralWidget(widget)
 
-        toolbar = QtWidgets.QToolBar()
+        # toolbar = QtWidgets.QToolBar()
         # a exit-button (add it as the last object to make sure it's on top)
-        self.floatb = FloatingButtonWidget(self)
-        self.floatb.setFixedSize(30, 30)
-        self.floatb.setText("\u274C")
-        self.floatb.setStyleSheet("text-align:top;border:none;")
-        self.floatb.clicked.connect(self.close_button_callback)
-        self.floatb.move(0,0)
+        # self.closebutton = FloatingButtonWidget(self)
+        # self.closebutton.setFixedSize(30, 30)
+        # self.closebutton.setText("\u274C")
+        # self.closebutton.setStyleSheet("text-align:top;border:none;")
+        # self.closebutton.clicked.connect(self.close_button_callback)
+        # self.closebutton.move(0,0)
 
-        self.floatb2 = FloatingButtonWidget(self)
-        self.floatb2.setFixedSize(30, 30)
-        self.floatb2.setText("\u25a0")
-        self.floatb2.setStyleSheet("text-align:top;border:none;")
-        self.floatb2.clicked.connect(self.maximize_button_callback)
-        self.floatb2.paddingLeft = 30
+        # self.enlargebutton = FloatingButtonWidget(self)
+        # self.enlargebutton.setFixedSize(30, 30)
+        # self.enlargebutton.setText("\u25a0")
+        # self.enlargebutton.setStyleSheet("text-align:top;border:none;")
+        # self.enlargebutton.clicked.connect(self.maximize_button_callback)
+        # self.enlargebutton.paddingLeft = 30
 
-        toolbar.addWidget(self.floatb)
-        toolbar.addWidget(self.floatb2)
 
-        toolbar.setFloatable(False)
-        toolbar.setMovable(False)
 
-        self.addToolBar(toolbar)
+        self.b_close = QtWidgets.QPushButton()
+        self.b_close.setFixedSize(30, 30)
+        self.b_close.setText("\u274C")
+        self.b_close.clicked.connect(self.close_button_callback)
+        self.b_close.paddingLeft = 0
+        self.b_close.paddingTop = 0
+        self.b_close.setStyleSheet("text-align:top;border:none;")
+
+        self.b_enlarge = QtWidgets.QPushButton()
+        self.b_enlarge.setFixedSize(30, 30)
+        self.b_enlarge.setText("\u25a0")
+        self.b_enlarge.clicked.connect(self.maximize_button_callback)
+        self.b_enlarge.paddingLeft = 0
+        self.b_enlarge.paddingTop = 0
+        self.b_enlarge.setStyleSheet("text-align:top;border:none;")
+
+
+        # toolbar.addWidget(self.enlargebutton)
+        # toolbar.addWidget(self.closebutton)
+
+        # toolbar.setFloatable(False)
+        # toolbar.setMovable(False)
+
+        # self.addToolBar(toolbar)
 
     def resizeEvent(self, event): #2
         super().resizeEvent(event)
-        self.floatb.update_position()
-        self.floatb2.update_position()
+        # self.enlargebutton.update_position()
+        # self.closebutton.update_position()
 
 
     @property
@@ -389,7 +410,10 @@ class EOmapsWindow(ResizableWindow):
         return self.canvas.m
 
     def close_button_callback(self):
+        self.menu_dock.close()
         self.close()
+        # from PyQt5.QtWidgets import QApplication
+        # QApplication.closeAllWindows()
         # TODO detect if all windows are closed, and if so call sys.exit!
         #sys.exit(0)
 
