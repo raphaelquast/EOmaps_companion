@@ -86,6 +86,9 @@ class AddWMSMenuButton(QtWidgets.QPushButton):
 
 
     def menu_callback_factory(self, wms, wmslayer):
+        if "|" in self.m.BM.bg_layer:
+            print("adding features to multi-layers is not supported!")
+            return
 
         def wms_cb():
             wms.do_add_layer(wmslayer, layer=self.m.BM.bg_layer)

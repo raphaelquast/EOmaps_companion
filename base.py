@@ -326,7 +326,9 @@ class EOmapsWindow(ResizableWindow):
 
         # make sure focus is correctly set so that the map responds to keypress events
         # see https://stackoverflow.com/a/51383190/9703451
+
         self.canvas.setFocusPolicy(QtCore.Qt.ClickFocus)
+
         # focus the map on startup
         self.canvas.setFocus()
 
@@ -410,6 +412,13 @@ class EOmapsWindow(ResizableWindow):
         return self.canvas.m
 
     def close_button_callback(self):
+        # TODO save cleanup
+        plt.close(self.m.figure.f)
+        self.m.cleanup()
+        self.canvas.m = None
+
+
+
         self.menu_dock.close()
         self.close()
         # from PyQt5.QtWidgets import QApplication

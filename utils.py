@@ -105,16 +105,26 @@ class GetColorWidget(QtWidgets.QWidget):
         """
 
         super().__init__()
+        if isinstance(facecolor, str):
+            self.facecolor = QtGui.QColor(facecolor)
+        else:
+            self.facecolor = QtGui.QColor(*facecolor)
+        if isinstance(edgecolor, str):
+            self.edgecolor = QtGui.QColor(edgecolor)
+        else:
+            self.edgecolor = QtGui.QColor(*edgecolor)
 
-
-        self.facecolor = QtGui.QColor(facecolor)
-        self.edgecolor = QtGui.QColor(edgecolor)
         self.linewidth = linewidth
         self.alpha = alpha
 
 
         self.setMinimumSize(15, 15)
         self.setMaximumSize(100, 100)
+
+        self.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
+                           QtWidgets.QSizePolicy.Expanding)
+
+
 
         self.setToolTip("<b>click</b>: set facecolor <br> <b>alt + click</b>: set edgecolor!")
 
@@ -133,9 +143,9 @@ class GetColorWidget(QtWidgets.QWidget):
         size = self.size()
 
         if self.linewidth > 0.01:
-            painter.setPen(QtGui.QPen(self.edgecolor, self.linewidth, Qt.SolidLine))
+            painter.setPen(QtGui.QPen(self.edgecolor, 1.1*self.linewidth, Qt.SolidLine))
         else:
-            painter.setPen(QtGui.QPen(self.facecolor, self.linewidth, Qt.SolidLine))
+            painter.setPen(QtGui.QPen(self.facecolor, 1.1*self.linewidth, Qt.SolidLine))
 
         painter.setBrush(QtGui.QBrush(self.facecolor, Qt.SolidPattern))
 
@@ -145,27 +155,43 @@ class GetColorWidget(QtWidgets.QWidget):
         rect = QRectF(w/2 - s/2, h/2 - s/2, s, s)
         painter.drawRoundedRect(rect, s/5, s/5)
 
+        # painter.setFont(QtGui.QFont("Arial", 7))
+        # painter.drawText(0, 0, w, h, Qt.AlignCenter,
+        #                  f"α:  {self.alpha:.2f}" + "\n" + f"lw: {self.linewidth:.2f}")
+
     def mousePressEvent(self, event):
-        print("clicked!")
         modifiers = QtWidgets.QApplication.keyboardModifiers()
         if event.buttons() & (bool(modifiers == Qt.AltModifier)):
-            print("clicked! edge")
             self.set_edgecolor_dialog()
         else:
-            print("clicked! face")
             self.set_facecolor_dialog()
 
+    def cb_colorselected(self):
+        print("aaa")
+        # a general callback that will always be connected to .colorSelected
+        pass
+
     def set_facecolor_dialog(self):
-        c = QtWidgets.QColorDialog.getColor()
-        self.set_facecolor(c)
+        self._dialog = QtWidgets.QColorDialog()
+        self._dialog.setOption(QtWidgets.QColorDialog.ShowAlphaChannel, on=True)
+        self._dialog.colorSelected.connect(self.set_facecolor)
+        self._dialog.colorSelected.connect(self.cb_colorselected)
+        self._dialog.setCurrentColor(QtGui.QColor(self.facecolor))
+        self._dialog.open()
 
     def set_edgecolor_dialog(self):
-        c = QtWidgets.QColorDialog.getColor()
-        self.set_edgecolor(c)
+        self._dialog = QtWidgets.QColorDialog()
+        self._dialog.setOption(QtWidgets.QColorDialog.ShowAlphaChannel, on=True)
+        self._dialog.colorSelected.connect(self.set_edgecolor)
+        self._dialog.colorSelected.connect(self.cb_colorselected)
+        self._dialog.setCurrentColor(QtGui.QColor(self.edgecolor))
+        self._dialog.open()
 
     def set_facecolor(self, color):
         if isinstance(color, str):
             color = QtGui.QColor(color)
+
+        self.alpha = color.alpha() / 255
 
         color = QtGui.QColor(*color.getRgb()[:3], int(self.alpha * 255))
 
@@ -176,7 +202,8 @@ class GetColorWidget(QtWidgets.QWidget):
         if isinstance(color, str):
             color = QtGui.QColor(color)
 
-        color = QtGui.QColor(*color.getRgb()[:3], int(self.alpha * 255))
+        #color = QtGui.QColor(*color.getRgb()[:3], int(self.alpha * 255))
+        #color = QtGui.QColor(*color.getRgbF())
 
         self.edgecolor = color
         self.update()
@@ -188,7 +215,7 @@ class GetColorWidget(QtWidgets.QWidget):
     def set_alpha(self, alpha):
         self.alpha = alpha
         self.set_facecolor(QtGui.QColor(*self.facecolor.getRgb()[:3], int(self.alpha * 255)))
-        self.set_edgecolor(QtGui.QColor(*self.edgecolor.getRgb()[:3], int(self.alpha * 255)))
+        #self.set_edgecolor(QtGui.QColor(*self.edgecolor.getRgb()[:3], int(self.alpha * 255)))
 
 
 class EditLayoutButton(QtWidgets.QPushButton):
@@ -236,8 +263,10 @@ class AlphaSlider(QtWidgets.QSlider):
         self.setTickPosition(QtWidgets.QSlider.TicksBothSides)
         self.setValue(100)
 
-        self.setMinimumWidth(50)
-        self.setMaximumWidth(100)
+        #self.setMinimumWidth(50)
+        #self.setMaximumWidth(100)
+        self.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding,
+                            QtWidgets.QSizePolicy.MinimumExpanding)
 
         self.valueChanged.connect(self.value_changed)
 
@@ -256,7 +285,6 @@ class AlphaSlider(QtWidgets.QSlider):
 
     def value_changed(self, i):
         self.alpha = i/100
-
 
 
 class DrawerWidget(QtWidgets.QWidget):
@@ -499,7 +527,7 @@ class PeekLayerWidget(QtWidgets.QWidget):
         layout.addLayout(buttons)
         layout.addWidget(alphalabel)
         layout.addWidget(self.alphaslider)
-
+        layout.addStretch(1)
         layout.setAlignment(Qt.AlignTop)
 
         self.setLayout(layout)
@@ -680,17 +708,18 @@ class ShowPeekLayerWidget(QtWidgets.QWidget):
 
         #show = ShowLayerWidget(m=self.m)
 
-        show = LayerEditor(m = self.m)
+        #show = LayerEditor(m = self.m)
 
-        new = NewWindowWidget()
-        show.layout().addStretch(10)
-        show.layout().addWidget(new)
+        #new = NewWindowWidget()
+        #show.layout().addStretch(10)
+        #show.layout().addWidget(new)
 
         peek = PeekLayerWidget(parent=self.parent)
 
 
         leftlayout = QtWidgets.QVBoxLayout()
-        leftlayout.addWidget(show)
+        leftlayout.setAlignment(Qt.AlignTop)
+        #leftlayout.addWidget(new)
 
         rightlayout = QtWidgets.QVBoxLayout()
         rightlayout.addWidget(peek)
@@ -1546,18 +1575,18 @@ class OpenDataStartTab(QtWidgets.QWidget):
         super().__init__(*args, **kwargs)
 
 
-        t1 = QtWidgets.QLabel()
-        t1.setAlignment(Qt.AlignBottom)
+        self.t1 = QtWidgets.QLabel()
+        self.t1.setAlignment(Qt.AlignBottom)
 
-        b1 = self.FileButton("Open GeoTIFF", tab=parent, txt=t1, plotclass=PlotGeoTIFFWidget)
-        b2 = self.FileButton("Open NetCDF", tab=parent, txt=t1, plotclass=PlotNetCDFWidget)
-        b3 = self.FileButton("Open CSV", tab=parent, txt=t1, plotclass=PlotCSVWidget)
+        self.b1 = self.FileButton("Open GeoTIFF", tab=parent, txt=self.t1, plotclass=PlotGeoTIFFWidget)
+        self.b2 = self.FileButton("Open NetCDF", tab=parent, txt=self.t1, plotclass=PlotNetCDFWidget)
+        self.b3 = self.FileButton("Open CSV", tab=parent, txt=self.t1, plotclass=PlotCSVWidget)
 
         layout = QtWidgets.QGridLayout()
-        layout.addWidget(b1, 0, 0)
-        layout.addWidget(b2, 1, 0)
-        layout.addWidget(b3, 2, 0)
-        layout.addWidget(t1, 3, 0)
+        layout.addWidget(self.b1, 0, 0)
+        layout.addWidget(self.b2, 1, 0)
+        layout.addWidget(self.b3, 2, 0)
+        layout.addWidget(self.t1, 3, 0)
 
 
         layout.setAlignment(Qt.AlignCenter)
@@ -1583,10 +1612,10 @@ class OpenDataStartTab(QtWidgets.QWidget):
                 self.txt.setText("")
 
 
-            t = self.PlotClass(parent = self.tab.parent, tab=self.tab)
+            self.plc = self.PlotClass(parent = self.tab.parent, tab=self.tab)
 
             try:
-                t.open_file()
+                self.plc.open_file()
             except Exception:
                 if self.txt:
                     self.txt.setText("File could not be opened...")
@@ -1655,6 +1684,11 @@ class SaveFileWidget(QtWidgets.QWidget):
         layout.addWidget(b_edit, 1, 0)
         layout.addWidget(b1, 1, 1)
 
+        layout.addItem(QtWidgets.QSpacerItem(30, 30), 2, 0)
+        new = NewWindowWidget()
+        layout.addWidget(new, 3, 0, 1, 2)
+
+
         layout.setAlignment(Qt.AlignCenter)
         self.setLayout(layout)
 
@@ -1678,17 +1712,30 @@ class ControlTabs(QtWidgets.QTabWidget):
         super().__init__(*args, **kwargs)
         self.parent = parent
 
-        self.tab1 = ShowPeekLayerWidget(parent=self.parent)
+        self.tab1 = PeekLayerWidget(parent=self.parent)
         self.tab2 = OpenFileTabs(parent=self.parent)
         self.tab3 = DrawerWidget(parent=self.parent)
         self.tab4 = SaveFileWidget(parent=self.parent)
 
-        self.tab5 = LayerEditor(m = self.m)
+        #self.tab5 = LayerEditor(m = self.m)
 
-        self.addTab(self.tab1, r"Edit || Compare")
+        from .layer import LayerArtistEditor
+        self.tab6 = LayerArtistEditor(m=self.m)
+
+        self.addTab(self.tab1, r"Compare")
+        self.addTab(self.tab6, "Edit")
         self.addTab(self.tab2, "Open Files")
         self.addTab(self.tab3, "Draw Shapes")
         self.addTab(self.tab4, "Save")
+
+
+        # TODO this should be executed on every m.BM.add_bg_artist action!
+        # re-populate artists on tab-change
+        self.currentChanged.connect(self.tabchanged)
+
+    def tabchanged(self):
+        if self.currentWidget() == self.tab6:
+            self.tab6.populate()
 
     @property
     def m(self):

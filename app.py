@@ -3,14 +3,20 @@ from . import utils
 
 import sys
 
+from pathlib import Path
+iconpath = Path(__file__).parent / "icons"
+
 from eomaps import Maps
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtCore import Qt
 
-import matplotlib.pyplot as plt
-plt.ioff()
+# import matplotlib.pyplot as plt
+# plt.ioff()
+
+# import matplotlib
+# matplotlib.use("agg")
 
 
 class MyMap(EOmapsCanvas):
@@ -45,6 +51,35 @@ class MyMap(EOmapsCanvas):
         return m
 
 
+
+class EOmaps_titlebar(QtWidgets.QWidget):
+    def __init__(self, *args, m=None, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.m = m
+
+        layout = QtWidgets.QHBoxLayout()
+
+        logo = QtGui.QPixmap(str(iconpath / "logo.png"))
+        logolabel = QtWidgets.QLabel()
+        logolabel.setMaximumHeight(25)
+        logolabel.setAlignment(Qt.AlignBottom|Qt.AlignRight)
+        logolabel.setPixmap(logo.scaled(logolabel.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+        from .utils import ShowLayerWidget
+        from .layer import AutoUpdateLayerMenuButton
+        #showlayer = ShowLayerWidget(m = self.m)
+        showlayer = AutoUpdateLayerMenuButton(m=self.m)
+
+
+        layout.addWidget(showlayer)
+        layout.addWidget(logolabel)
+
+        layout.setAlignment(Qt.AlignTop|Qt.AlignRight)
+
+        self.setLayout(layout)
+
+
 from PyQt5.QtWidgets import QDesktopWidget
 
 class MainWindow(EOmapsWindow):
@@ -52,7 +87,17 @@ class MainWindow(EOmapsWindow):
     def __init__(self, *args, crs=None, m=None, **kwargs):
         # Create the maptlotlib FigureCanvas object,
         # which defines a single set of axes as self.axes.
-        canvas = MyMap(self, width=12, height=8, dpi=72, crs=crs, m=m)
+
+        if m is None:
+            width = 12
+            height = 8
+            dpi = 72
+        else:
+            width = m.figure.f.get_figwidth()
+            height = m.figure.f.get_figheight()
+            dpi = m.figure.f.dpi
+
+        canvas = MyMap(self, width=width, height=height, dpi=dpi, crs=crs, m=m)
 
         super().__init__(eomaps_canvas = canvas, *args, **kwargs)
         self.setWindowTitle("EOmaps QT embedding example")
@@ -62,17 +107,15 @@ class MainWindow(EOmapsWindow):
         self.menu_widget = QtWidgets.QWidget()
         menu_layout = QtWidgets.QVBoxLayout()
 
-        logo = QtGui.QPixmap("logo.png")
-        logolabel = QtWidgets.QLabel()
-        logolabel.setMaximumHeight(30)
-        logolabel.setAlignment(Qt.AlignBottom|Qt.AlignRight)
-        logolabel.setPixmap(logo.scaled(logolabel.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+
+        # from .utils import ShowLayerWidget
+        # from .layer import AutoUpdateLayerCheckbox
+        #showlayer = ShowLayerWidget(m = self.m)
+        #showlayer = AutoUpdateLayerCheckbox(m=self.m)
 
 
-        from .utils import ShowLayerWidget
-        showlayer = ShowLayerWidget(m = self.m)
         self.toolbar.addSeparator()
-        self.toolbar.addWidget(showlayer)
+        #self.toolbar.addWidget(showlayer)
         self.toolbar.addWidget(self.b_enlarge)
         self.toolbar.addWidget(self.b_close)
         self.toolbar.setAllowedAreas(Qt.TopToolBarArea|Qt.BottomToolBarArea)
@@ -90,26 +133,53 @@ class MainWindow(EOmapsWindow):
                                    QtWidgets.QDockWidget.DockWidgetMovable)
         self.menu_dock.setAllowedAreas(Qt.TopDockWidgetArea|Qt.BottomDockWidgetArea)
         self.menu_dock.setWidget(self.menu_widget)
-        self.menu_dock.setTitleBarWidget(QtWidgets.QLabel(""))
 
-        #self.addDockWidget(Qt.BottomDockWidgetArea, self.menu_dock)
+        titlebar = EOmaps_titlebar(m=self.m)
+        self.menu_dock.setTitleBarWidget(titlebar)
 
-        menu_toolbar = QtWidgets.QDockWidget(flags=Qt.Window)
-        menu_toolbar.setFeatures(QtWidgets.QDockWidget.DockWidgetFloatable |
-                                   QtWidgets.QDockWidget.DockWidgetMovable)
-        menu_toolbar.setAllowedAreas(Qt.TopDockWidgetArea|Qt.BottomDockWidgetArea)
-        menu_toolbar.setWidget(self.menu_widget)
-        menu_toolbar.setTitleBarWidget(QtWidgets.QLabel(""))
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.menu_dock)
 
-        self.addDockWidget(Qt.BottomDockWidgetArea, menu_toolbar)
+        self.menu_dock.topLevelChanged.connect(self.toplevelchanged)
+
+        # TODO this prevents resizing of the figure!!
+        # keep the size fixed when docking widgets
+        # sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,
+        #                                    QtWidgets.QSizePolicy.Fixed)
+        # self.canvas.setSizePolicy(sizePolicy)
 
 
         self.show()
-        self.resize(1200,900)
+        if m is None:
+            self.resize(1200,900)
+        else:
+            self.menu_dock.setFloating(True)
+
         self.center()
-        #menu_dock.setFloating(True)
+
+        self.setAnimated(False)
 
         #self.setStyleSheet("QMainWindow::separator {width: 1px; border: none;}")
+
+    def toplevelchanged(self):
+        # TODO this does not yet work!!
+        print("level changed", self.canvas.width(), self.canvas.height())
+        sh = self.layout.sizeHint()
+        dsh = self.menu_dock.sizeHint()
+
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,
+                                           QtWidgets.QSizePolicy.Fixed)
+        self.canvas.setSizePolicy(sizePolicy)
+
+
+        if self.menu_dock.isFloating():
+            self.resize(self.width(), sh.height())
+        else:
+            self.resize(self.width(), self.height() + dsh.height())
+
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding,
+                                           QtWidgets.QSizePolicy.Expanding)
+        self.canvas.setSizePolicy(sizePolicy)
+
 
     def center(self):
         qr = self.frameGeometry()
@@ -124,12 +194,12 @@ class MainWindow(EOmapsWindow):
 
 def run(m=None):
     app = QtWidgets.QApplication(sys.argv)
-    logo = QtGui.QIcon("logo_rect.png")
+    logo = QtGui.QIcon(str(iconpath / "logo.png"))
     app.setWindowIcon(logo)
     # Force the style to be the same on all OSs:
     app.setStyle("Fusion")
 
-    # Now use a palette to switch to dark colors:
+    # # Now use a palette to switch to dark colors:
     palette = QtGui.QPalette()
     palette.setColor(QtGui.QPalette.Window, QtGui.QColor(53, 53, 53))
     palette.setColor(QtGui.QPalette.WindowText, Qt.white)
