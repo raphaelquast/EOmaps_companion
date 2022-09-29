@@ -64,8 +64,9 @@ class AddWMSMenuButton(QtWidgets.QPushButton):
                     "S1GBM:": WMS_S1GBM}
 
 
-        self.setText("Add WMS")
-        self.setMaximumWidth(200)
+        self.setText("Add WebMap Service")
+        width = self.fontMetrics().boundingRect(self.text()).width()
+        self.setFixedWidth(width * 1.6)
 
         feature_menu = QtWidgets.QMenu()
         feature_menu.setStyleSheet("QMenu { menu-scrollable: 1;}")

@@ -14,7 +14,6 @@ from PyQt5.QtCore import Qt, QRectF
 
 from pathlib import Path
 # %%
-
 class ResizableWindow(QtWidgets.QMainWindow):
 
     def __init__(self, *args, **kwargs):
@@ -26,7 +25,7 @@ class ResizableWindow(QtWidgets.QMainWindow):
         self.catch_cursor = 0
         self.installEventFilter(self)
 
-        self.top_resize_margin = 30
+        self.top_drag_margin = 30
 
     def eventFilter(self, source, event):
         if event.type() == QtCore.QEvent.HoverMove:
@@ -44,7 +43,9 @@ class ResizableWindow(QtWidgets.QMainWindow):
             self.set_cursor(event)
 
         elif event.type() == QtCore.QEvent.MouseMove:
-            if not hasattr(self, "press_pos"):
+            if event.buttons() == QtCore.Qt.NoButton:
+                self.set_cursor(event)
+            elif not hasattr(self, "press_pos"):
                 pass
             elif self.cursor().shape() != Qt.ArrowCursor:
                 self.resizing(self.origin, event, self.ori_geo, self.catch_cursor)
@@ -68,8 +69,11 @@ class ResizableWindow(QtWidgets.QMainWindow):
         bottom_right = rect.bottomRight()
         pos = e.pos()
 
+        margin = 5
+
         # catch top rectangle used for dragging
-        if pos in QtCore.QRect(QtCore.QPoint(top_left.x()+5,top_left.y()+5), QtCore.QPoint(top_right.x()-10,top_right.y()+self.top_resize_margin)):
+        if pos in QtCore.QRect(QtCore.QPoint(top_left.x()+margin*2,top_left.y()+margin),
+                               QtCore.QPoint(top_right.x()-margin*2,top_right.y()+self.top_drag_margin)):
             self.setCursor(Qt.ArrowCursor)
             self.catch_cursor = 0
 
@@ -80,42 +84,50 @@ class ResizableWindow(QtWidgets.QMainWindow):
             return
 
         #top catch
-        elif pos in QtCore.QRect(QtCore.QPoint(top_left.x()+5,top_left.y()), QtCore.QPoint(top_right.x()-5,top_right.y()+5)):
+        elif pos in QtCore.QRect(QtCore.QPoint(top_left.x()+margin,top_left.y()),
+                                 QtCore.QPoint(top_right.x()-margin,top_right.y()+margin)):
             self.setCursor(Qt.ArrowCursor)
             self.catch_cursor = 0
 
         #bottom catch
-        elif pos in QtCore.QRect(QtCore.QPoint(bottom_left.x()+5,bottom_left.y()), QtCore.QPoint(bottom_right.x()-5,bottom_right.y()-5)):
+        elif pos in QtCore.QRect(QtCore.QPoint(bottom_left.x()+margin,bottom_left.y()),
+                                 QtCore.QPoint(bottom_right.x()-margin,bottom_right.y()-margin)):
             self.setCursor(Qt.SizeVerCursor)
             self.catch_cursor = 2
 
         #right catch
-        elif pos in QtCore.QRect(QtCore.QPoint(top_right.x()-5,top_right.y()+5), QtCore.QPoint(bottom_right.x(),bottom_right.y()-5)):
+        elif pos in QtCore.QRect(QtCore.QPoint(top_right.x()-margin,top_right.y()+margin),
+                                 QtCore.QPoint(bottom_right.x(),bottom_right.y()-margin)):
             self.setCursor(Qt.SizeHorCursor)
             self.catch_cursor = 3
 
         #left catch
-        elif pos in QtCore.QRect(QtCore.QPoint(top_left.x()+5,top_left.y()+5), QtCore.QPoint(bottom_left.x(),bottom_left.y()-5)):
+        elif pos in QtCore.QRect(QtCore.QPoint(top_left.x()+margin,top_left.y()+margin),
+                                 QtCore.QPoint(bottom_left.x(),bottom_left.y()-margin)):
             self.setCursor(Qt.SizeHorCursor)
             self.catch_cursor = 4
 
         #top_right catch
-        elif pos in QtCore.QRect(QtCore.QPoint(top_right.x(),top_right.y()), QtCore.QPoint(top_right.x()-5,top_right.y()+5)):
+        elif pos in QtCore.QRect(QtCore.QPoint(top_right.x(),top_right.y()),
+                                 QtCore.QPoint(top_right.x()-margin,top_right.y()+margin)):
             self.setCursor(Qt.SizeBDiagCursor)
             self.catch_cursor = 5
 
         #botom_left catch
-        elif pos in QtCore.QRect(QtCore.QPoint(bottom_left.x(),bottom_left.y()), QtCore.QPoint(bottom_left.x()+5,bottom_left.y()-5)):
+        elif pos in QtCore.QRect(QtCore.QPoint(bottom_left.x(),bottom_left.y()),
+                                 QtCore.QPoint(bottom_left.x()+margin,bottom_left.y()-margin)):
             self.setCursor(Qt.SizeBDiagCursor)
             self.catch_cursor = 6
 
         #top_left catch
-        elif pos in QtCore.QRect(QtCore.QPoint(top_left.x(),top_left.y()), QtCore.QPoint(top_left.x()+5,top_left.y()+5)):
+        elif pos in QtCore.QRect(QtCore.QPoint(top_left.x(),top_left.y()),
+                                 QtCore.QPoint(top_left.x()+margin,top_left.y()+margin)):
             self.setCursor(Qt.SizeFDiagCursor)
             self.catch_cursor = 7
 
         #bottom_right catch
-        elif pos in QtCore.QRect(QtCore.QPoint(bottom_right.x(),bottom_right.y()), QtCore.QPoint(bottom_right.x()-5,bottom_right.y()-5)):
+        elif pos in QtCore.QRect(QtCore.QPoint(bottom_right.x(),bottom_right.y()),
+                                 QtCore.QPoint(bottom_right.x()-margin,bottom_right.y()-margin)):
             self.setCursor(Qt.SizeFDiagCursor)
             self.catch_cursor = 8
 
@@ -419,7 +431,7 @@ class EOmapsWindow(ResizableWindow):
 
 
 
-        self.menu_dock.close()
+        self.menu_window.close()
         self.close()
         # from PyQt5.QtWidgets import QApplication
         # QApplication.closeAllWindows()

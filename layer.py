@@ -342,10 +342,14 @@ class LayerEditor(QtWidgets.QFrame):
         self.m = m
 
         self.new_layer_name = QtWidgets.QLineEdit()
-        self.new_layer_name.setPlaceholderText("A new layer")
+        self.new_layer_name.setMaximumWidth(300)
+        self.new_layer_name.setPlaceholderText("Create a new layer")
 
-        self.new_layer_button = QtWidgets.QPushButton("Create")
-        self.new_layer_button.clicked.connect(self.new_layer)
+        # self.new_layer_button = QtWidgets.QPushButton("Create")
+        # width = self.new_layer_button.fontMetrics().boundingRect(self.new_layer_button.text()).width()
+        # self.new_layer_button.setFixedWidth(width*1.6)
+
+        self.new_layer_name.returnPressed.connect(self.new_layer)
 
         try:
             addwms = AddWMSMenuButton(m=self.m)
@@ -353,23 +357,29 @@ class LayerEditor(QtWidgets.QFrame):
             addwms = QtWidgets.QPushButton("WMS services unavailable")
 
         newlayer = QtWidgets.QHBoxLayout()
+        newlayer.setAlignment(Qt.AlignLeft)
+
+        newlayer.addWidget(addwms)
+        newlayer.addStretch(1)
         newlayer.addWidget(self.new_layer_name)
-        newlayer.addWidget(self.new_layer_button)
+        #newlayer.addWidget(self.new_layer_button)
+
 
         addfeature = AddFeatureWidget(m=self.m)
 
         layout = QtWidgets.QVBoxLayout()
         layout.addLayout(newlayer)
         layout.addWidget(addfeature)
-        layout.addWidget(addwms)
-
         self.setLayout(layout)
 
 
     def new_layer(self):
         layer = self.new_layer_name.text()
         if len(layer) == 0:
-            layer = self.new_layer_name.placeholderText()
+            QtWidgets.QToolTip.showText(self.mapToGlobal(self.new_layer_name.pos()),
+                                        "Just type a layer-name and press return!")
+            return
+            #layer = self.new_layer_name.placeholderText()
 
         m2 = self.m.new_layer(layer)
         self.m.show_layer(layer)
@@ -394,7 +404,11 @@ class AddFeaturesMenuButton(QtWidgets.QPushButton):
 
         feature_types = [i for i in dir(self.m.add_feature) if not i.startswith("_")]
         self.setText("Add Feature")
-        self.setMaximumWidth(200)
+        #self.setMaximumWidth(200)
+
+        width = self.fontMetrics().boundingRect(self.text()).width()
+        self.setFixedWidth(width * 1.6)
+
 
         feature_menu = QtWidgets.QMenu()
         feature_menu.setStyleSheet("QMenu { menu-scrollable: 1;}")
@@ -490,7 +504,7 @@ class AddFeatureWidget(QtWidgets.QFrame):
         # set stretch factor to expand the color-selector first
         layout.setColumnStretch(0, 1)
 
-        layout.setAlignment(Qt.AlignCenter)
+        layout.setAlignment(Qt.AlignLeft)
         self.setLayout(layout)
 
         # do this at the end to ensure everything has already been set up properly
@@ -515,7 +529,7 @@ class AddFeatureWidget(QtWidgets.QFrame):
             edgecolor = self.colorselector.edgecolor.getRgbF(),
             linewidth = self.linewidthslider.alpha * 5,
             zorder = int(self.zorder.text()),
-            alpha = self.alphaslider.alpha,
+            #alpha = self.alphaslider.alpha,   # don't specify alpha! it interferes with the alpha of the colors!
             )
         )
 
@@ -530,12 +544,16 @@ class LayerArtistEditor(QtWidgets.QWidget):
         self.tabs = QtWidgets.QTabWidget()
 
         addfeature = LayerEditor(m = self.m)
-        addfeature.new_layer_button.clicked.connect(self.populate)
+        addfeature.new_layer_name.returnPressed.connect(self.populate)
 
 
         splitter = QtWidgets.QSplitter(Qt.Vertical)
         splitter.addWidget(addfeature)
         splitter.addWidget(self.tabs)
+
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+
 
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(splitter)
@@ -690,7 +708,7 @@ class LayerArtistEditor(QtWidgets.QWidget):
 
             b_c = GetColorWidget(facecolor=facecolor, edgecolor=edgecolor)
             b_c.cb_colorselected = self.set_color(artist=a, layer=layer, colorwidget=b_c)
-
+            b_c.setFrameStyle(QtWidgets.QFrame.StyledPanel | QtWidgets.QFrame.Plain)
 
         except:
             b_c = None
@@ -701,7 +719,7 @@ class LayerArtistEditor(QtWidgets.QWidget):
         if b_c is not None:
             layout.addWidget(b_c)   # color
         layout.addWidget(label, 1) # title
-        layout.addWidget(l_z)   # zorder label
+        layout.addWidget(l_z)   # zorder label↓
         layout.addWidget(b_z)   # zorder
 
         if b_a is not None:
@@ -813,7 +831,7 @@ class LayerArtistEditor(QtWidgets.QWidget):
 
     def set_color(self, artist, layer, colorwidget):
         def cb():
-            artist.set_facecolor(colorwidget.facecolor.getRgbF())
+            artist.set_fc(colorwidget.facecolor.getRgbF())
             artist.set_edgecolor(colorwidget.edgecolor.getRgbF())
 
             self.m.redraw()

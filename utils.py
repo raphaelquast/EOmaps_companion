@@ -83,7 +83,7 @@ class CmapDropdown(QtWidgets.QComboBox):
 
 
 
-class GetColorWidget(QtWidgets.QWidget):
+class GetColorWidget(QtWidgets.QFrame):
     def __init__(self, facecolor="#ff0000", edgecolor="#000000", linewidth=1, alpha=1):
         """
         A widget that indicates a selected color (and opens a popup to change the
@@ -105,6 +105,7 @@ class GetColorWidget(QtWidgets.QWidget):
         """
 
         super().__init__()
+
         if isinstance(facecolor, str):
             self.facecolor = QtGui.QColor(facecolor)
         else:
@@ -121,12 +122,12 @@ class GetColorWidget(QtWidgets.QWidget):
         self.setMinimumSize(15, 15)
         self.setMaximumSize(100, 100)
 
+
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
                            QtWidgets.QSizePolicy.Expanding)
 
 
-
-        self.setToolTip("<b>click</b>: set facecolor <br> <b>alt + click</b>: set edgecolor!")
+        self.setToolTip("<b>click</b>: set facecolor <br> <b>alt + click</b>: set edgecolor")
 
         self.setStyleSheet("""QToolTip {
                            font-family: "SansSerif";
@@ -136,7 +137,14 @@ class GetColorWidget(QtWidgets.QWidget):
                            border: none;
                            }""")
 
+
+    def resizeEvent(self, e):
+        # make frame rectangular
+        self.setMaximumHeight(self.width())
+
+
     def paintEvent(self, e):
+        super().paintEvent(e)
         painter = QtGui.QPainter(self)
 
         painter.setRenderHints(QtGui.QPainter.HighQualityAntialiasing )
@@ -158,6 +166,8 @@ class GetColorWidget(QtWidgets.QWidget):
         # painter.setFont(QtGui.QFont("Arial", 7))
         # painter.drawText(0, 0, w, h, Qt.AlignCenter,
         #                  f"α:  {self.alpha:.2f}" + "\n" + f"lw: {self.linewidth:.2f}")
+
+
 
     def mousePressEvent(self, event):
         modifiers = QtWidgets.QApplication.keyboardModifiers()
@@ -264,9 +274,9 @@ class AlphaSlider(QtWidgets.QSlider):
         self.setValue(100)
 
         #self.setMinimumWidth(50)
-        #self.setMaximumWidth(100)
+        self.setMaximumWidth(300)
         self.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding,
-                            QtWidgets.QSizePolicy.MinimumExpanding)
+                           QtWidgets.QSizePolicy.Minimum)
 
         self.valueChanged.connect(self.value_changed)
 
@@ -905,6 +915,8 @@ class PlotFileWidget(QtWidgets.QWidget):
 
         """
         super().__init__(*args, **kwargs)
+
+
         self.parent = parent
         self.tab = tab
         self.attach_tab_after_plot = attach_tab_after_plot
@@ -1089,8 +1101,11 @@ class PlotFileWidget(QtWidgets.QWidget):
                 self.m2.cb.pick.remove(self.cid_annotate)
                 self.cid_annotate = None
 
-    def open_file(self):
-        file_path, info = self.do_open_file()
+    def open_file(self, file_path=None):
+        # if file_path is None:
+        #     file_path = Path(QtWidgets.QFileDialog.getOpenFileName()[0])
+
+        info = self.do_open_file(file_path)
 
         if self.file_endings is not None:
             if file_path.suffix.lower() not in self.file_endings:
@@ -1110,8 +1125,9 @@ class PlotFileWidget(QtWidgets.QWidget):
 
         # # TODO
         self.window = NewWindow(parent=self.parent)
+        self.window.setWindowFlags(Qt.FramelessWindowHint|Qt.Dialog|Qt.WindowStaysOnTopHint)
+
         self.window.layout.addWidget(self)
-        #self.window.setWindowFlags(Qt.WindowStaysOnTopHint)
         self.window.resize(800, 500)
         self.window.show()
 
@@ -1194,6 +1210,8 @@ def show_error_popup(text=None, info=None, title=None, details=None):
        msg.setDetailedText(details)
 
    msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+   msg.setWindowFlags(Qt.Dialog|Qt.WindowStaysOnTopHint)
+
    msg.show()
    #msg.exec_()
 
@@ -1209,10 +1227,8 @@ class PlotGeoTIFFWidget(PlotFileWidget):
 
     file_endings = (".tif", ".tiff")
 
-    def do_open_file(self):
+    def do_open_file(self, file_path):
         import xarray as xar
-
-        file_path = Path(QtWidgets.QFileDialog.getOpenFileName()[0])
 
         with xar.open_dataset(file_path) as f:
             import io
@@ -1236,7 +1252,7 @@ class PlotGeoTIFFWidget(PlotFileWidget):
         self.parameter.set_complete_vals(cols)
 
 
-        return file_path, info.getvalue()
+        return info.getvalue()
 
 
     def do_plot_file(self):
@@ -1353,10 +1369,8 @@ class PlotNetCDFWidget(PlotFileWidget):
                              details=traceback.format_exc())
 
 
-    def do_open_file(self):
+    def do_open_file(self, file_path):
         import xarray as xar
-
-        file_path = Path(QtWidgets.QFileDialog.getOpenFileName()[0])
 
         with xar.open_dataset(file_path) as f:
             import io
@@ -1377,7 +1391,7 @@ class PlotNetCDFWidget(PlotFileWidget):
             self.y.set_complete_vals(cols)
             self.parameter.set_complete_vals(cols)
 
-        return file_path, info.getvalue()
+        return info.getvalue()
 
 
     def do_update_vals(self):
@@ -1445,10 +1459,8 @@ class PlotCSVWidget(PlotFileWidget):
     def get_crs(self):
         return get_crs(self.crs.text())
 
-    def do_open_file(self):
+    def do_open_file(self, file_path):
         import pandas as pd
-
-        file_path = Path(QtWidgets.QFileDialog.getOpenFileName()[0])
 
         head = pd.read_csv(file_path, nrows=50)
         cols = head.columns
@@ -1468,7 +1480,7 @@ class PlotCSVWidget(PlotFileWidget):
             self.y.setText(cols[2])
             self.parameter.setText(cols[3])
 
-        return file_path, head.__repr__()
+        return head.__repr__()
 
 
     def do_plot_file(self):
@@ -1577,45 +1589,85 @@ class OpenDataStartTab(QtWidgets.QWidget):
 
         self.t1 = QtWidgets.QLabel()
         self.t1.setAlignment(Qt.AlignBottom)
+        self.set_std_text()
 
-        self.b1 = self.FileButton("Open GeoTIFF", tab=parent, txt=self.t1, plotclass=PlotGeoTIFFWidget)
-        self.b2 = self.FileButton("Open NetCDF", tab=parent, txt=self.t1, plotclass=PlotNetCDFWidget)
-        self.b3 = self.FileButton("Open CSV", tab=parent, txt=self.t1, plotclass=PlotCSVWidget)
+        self.b1 = self.FileButton("Open File", tab=parent, txt=self.t1)
 
         layout = QtWidgets.QGridLayout()
         layout.addWidget(self.b1, 0, 0)
-        layout.addWidget(self.b2, 1, 0)
-        layout.addWidget(self.b3, 2, 0)
         layout.addWidget(self.t1, 3, 0)
 
 
         layout.setAlignment(Qt.AlignCenter)
         self.setLayout(layout)
 
+        self.setAcceptDrops(True)
+
+    def set_std_text(self):
+        self.t1.setText(
+            "\n"+
+            "Open or DRAG & DROP files:\n\n"+
+            "Currently supported filetypes\n"+
+            "    NetCDF, GeoTIFF, CSV)")
+
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls():
+            e.accept()
+            self.t1.setText("DROP IT!")
+        else:
+            e.ignore()
+            self.set_std_text()
+
+    def dragLeaveEvent(self, e):
+        self.set_std_text()
+
+    def dropEvent(self, e):
+        urls = e.mimeData().urls()
+        if len(urls) > 1:
+            return
+
+        self.b1.new_file_tab(urls[0].toLocalFile())
+
+
+
 
     class FileButton(QtWidgets.QPushButton):
-        def __init__(self, *args, tab=None, plotclass=None, txt=None, **kwargs):
+        def __init__(self, *args, tab=None, txt=None, **kwargs):
             super().__init__(*args, **kwargs)
             self.tab = tab
-            self.clicked.connect(self.new_file_tab)
+            self.clicked.connect(lambda: self.new_file_tab())
             self.txt = txt
 
-            self.PlotClass = plotclass
 
         @property
         def m(self):
             return self.tab.m
 
-        def new_file_tab(self):
+        def new_file_tab(self, file_path = None):
 
             if self.txt:
                 self.txt.setText("")
 
+            if file_path is None:
+                file_path = Path(QtWidgets.QFileDialog.getOpenFileName()[0])
+            elif isinstance(file_path, str):
+                file_path = Path(file_path)
 
-            self.plc = self.PlotClass(parent = self.tab.parent, tab=self.tab)
+            global plc
+            ending = file_path.suffix.lower()
+            if ending in [".nc"]:
+                plc = PlotNetCDFWidget(parent = self.tab.parent, tab=self.tab)
+            elif ending in [".csv"]:
+                plc = PlotCSVWidget(parent = self.tab.parent, tab=self.tab)
+            elif ending in [".tif", ".tiff"]:
+                plc = PlotGeoTIFFWidget(parent = self.tab.parent, tab=self.tab)
+            else:
+                print("unknown file extension")
+
+            #self.plc = self.PlotClass(parent = self.tab.parent, tab=self.tab)
 
             try:
-                self.plc.open_file()
+                plc.open_file(file_path)
             except Exception:
                 if self.txt:
                     self.txt.setText("File could not be opened...")
@@ -1679,14 +1731,16 @@ class SaveFileWidget(QtWidgets.QWidget):
         res.setAlignment(Qt.AlignTop)
 
 
-        layout = QtWidgets.QGridLayout()
-        layout.addLayout(res, 0, 0, 1, 2)
-        layout.addWidget(b_edit, 1, 0)
-        layout.addWidget(b1, 1, 1)
+        save_layout = QtWidgets.QGridLayout()
+        save_layout.addLayout(res, 0, 0, 1, 2)
+        save_layout.addWidget(b_edit, 1, 0)
+        save_layout.addWidget(b1, 1, 1)
 
-        layout.addItem(QtWidgets.QSpacerItem(30, 30), 2, 0)
         new = NewWindowWidget()
-        layout.addWidget(new, 3, 0, 1, 2)
+
+        layout = QtWidgets.QHBoxLayout()
+        layout.addLayout(save_layout)
+        layout.addWidget(new)
 
 
         layout.setAlignment(Qt.AlignCenter)

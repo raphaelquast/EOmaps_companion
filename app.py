@@ -1,4 +1,4 @@
-from .base import EOmapsWindow, EOmapsCanvas
+from .base import EOmapsWindow, EOmapsCanvas, ResizableWindow
 from . import utils
 
 import sys
@@ -52,7 +52,7 @@ class MyMap(EOmapsCanvas):
 
 
 
-class EOmaps_titlebar(QtWidgets.QWidget):
+class EOmaps_titlebar(QtWidgets.QToolBar):
     def __init__(self, *args, m=None, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -66,18 +66,49 @@ class EOmaps_titlebar(QtWidgets.QWidget):
         logolabel.setAlignment(Qt.AlignBottom|Qt.AlignRight)
         logolabel.setPixmap(logo.scaled(logolabel.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
+
+
         from .utils import ShowLayerWidget
         from .layer import AutoUpdateLayerMenuButton
         #showlayer = ShowLayerWidget(m = self.m)
         showlayer = AutoUpdateLayerMenuButton(m=self.m)
 
 
-        layout.addWidget(showlayer)
-        layout.addWidget(logolabel)
+        self.transparentQ = QtWidgets.QToolButton()
+        self.transparentQ.setStyleSheet("border:none")
+        self.transparentQ.setToolTip("Make window semi-transparent.")
+        self.transparentQ.setIcon(QtGui.QIcon(str(iconpath / "eye_closed.png")))
 
-        layout.setAlignment(Qt.AlignTop|Qt.AlignRight)
+        space = QtWidgets.QWidget()
+        space.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
 
-        self.setLayout(layout)
+        self.addWidget(self.transparentQ)
+        self.addWidget(space)
+        self.addWidget(showlayer)
+        self.addWidget(logolabel)
+
+        self.setMovable(False)
+        self.setStyleSheet("border: none; spacing:20px;")
+        self.setContentsMargins(5, 0, 5,5)
+
+
+class transparentWindow(ResizableWindow):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)
+
+        self.out_alpha = 0.25
+        self.setWindowFlags(Qt.FramelessWindowHint|Qt.Dialog|Qt.WindowStaysOnTopHint)
+
+    def focusInEvent(self, e):
+        self.setWindowOpacity(1)
+        super().focusInEvent(e)
+
+    def focusOutEvent(self, e):
+        if not self.isActiveWindow():
+            self.setWindowOpacity(self.out_alpha)
+        super().focusInEvent(e)
+
 
 
 from PyQt5.QtWidgets import QDesktopWidget
@@ -104,42 +135,74 @@ class MainWindow(EOmapsWindow):
 
         tabs = utils.ControlTabs(parent=self)
 
-        self.menu_widget = QtWidgets.QWidget()
+
+
+        b_showhide = QtWidgets.QToolButton()
+        b_showhide.setIcon(QtGui.QIcon(str(iconpath / "logo.png")))
+        b_showhide.clicked.connect(self.cb_showhide)
+        b_showhide.setAutoRaise(True)
+
+
+        self.menu_window = transparentWindow(flags=Qt.Window)
         menu_layout = QtWidgets.QVBoxLayout()
-
-
-        # from .utils import ShowLayerWidget
-        # from .layer import AutoUpdateLayerCheckbox
-        #showlayer = ShowLayerWidget(m = self.m)
-        #showlayer = AutoUpdateLayerCheckbox(m=self.m)
+        tabs.setMouseTracking(True)
 
 
         self.toolbar.addSeparator()
-        #self.toolbar.addWidget(showlayer)
+        self.toolbar.addWidget(b_showhide)
+
         self.toolbar.addWidget(self.b_enlarge)
         self.toolbar.addWidget(self.b_close)
-        self.toolbar.setAllowedAreas(Qt.TopToolBarArea|Qt.BottomToolBarArea)
+
+        self.toolbar.setMovable(False)
+        self.setStyleSheet("border: none; spacing:5px;")
+
+        #self.toolbar.setAllowedAreas(Qt.TopToolBarArea|Qt.BottomToolBarArea)
 
         self.addToolBar(self.toolbar)
 
-        tabs.setContentsMargins(5, 5, 5, 5)
 
+
+        self.titlebar = EOmaps_titlebar(m=self.m)
+        self.titlebar.transparentQ.clicked.connect(self.cb_transparentQ)
+
+
+
+        self.menu_window.addToolBar(self.titlebar)
+        # prevent context-menu's from appearing to avoid the "hide toolbar"
+        # context menu when right-clicking the toolbar
+        self.menu_window.setContextMenuPolicy(Qt.NoContextMenu)
 
         menu_layout.addWidget(tabs)
-        self.menu_widget.setLayout(menu_layout)
 
-        self.menu_dock = QtWidgets.QDockWidget(flags=Qt.Window)
-        self.menu_dock.setFeatures(QtWidgets.QDockWidget.DockWidgetFloatable |
-                                   QtWidgets.QDockWidget.DockWidgetMovable)
-        self.menu_dock.setAllowedAreas(Qt.TopDockWidgetArea|Qt.BottomDockWidgetArea)
-        self.menu_dock.setWidget(self.menu_widget)
+        sizegrip = QtWidgets.QSizeGrip(self.menu_window)
+        menu_layout.addWidget(sizegrip, 0, QtCore.Qt.AlignBottom | QtCore.Qt.AlignRight)
 
-        titlebar = EOmaps_titlebar(m=self.m)
-        self.menu_dock.setTitleBarWidget(titlebar)
+        menu_widget = QtWidgets.QWidget()
+        menu_widget.setLayout(menu_layout)
 
-        self.addDockWidget(Qt.BottomDockWidgetArea, self.menu_dock)
+        self.menu_window.setCentralWidget(menu_widget)
+        #self.menu_dock = transparentWindow(flags=Qt.Window)
+        # self.menu_dock.setFeatures(QtWidgets.QDockWidget.DockWidgetFloatable |
+        #                            QtWidgets.QDockWidget.DockWidgetMovable)
+        # self.menu_dock.setAllowedAreas(Qt.TopDockWidgetArea|Qt.BottomDockWidgetArea)
+        #self.menu_dock.setWidget(self.menu_widget)
 
-        self.menu_dock.topLevelChanged.connect(self.toplevelchanged)
+        #self.titlebar = EOmaps_titlebar(m=self.m)
+        #self.menu_dock.addToolBar(self.titlebar)
+
+
+        #self.menu_dock.setTitleBarWidget(self.titlebar)
+
+        # self.addDockWidget(Qt.BottomDockWidgetArea, self.menu_dock)
+
+        # self.menu_dock.topLevelChanged.connect(self.toplevelchanged)
+
+
+
+
+
+
 
         # TODO this prevents resizing of the figure!!
         # keep the size fixed when docking widgets
@@ -147,38 +210,63 @@ class MainWindow(EOmapsWindow):
         #                                    QtWidgets.QSizePolicy.Fixed)
         # self.canvas.setSizePolicy(sizePolicy)
 
+        #self.menu_window.show()
 
         self.show()
-        if m is None:
-            self.resize(1200,900)
-        else:
-            self.menu_dock.setFloating(True)
+        self.activateWindow()
+
+        # if m is None:
+        #     self.resize(1200,900)
+        # else:
+        #     self.menu_dock.setFloating(True)
 
         self.center()
 
         self.setAnimated(False)
 
+
         #self.setStyleSheet("QMainWindow::separator {width: 1px; border: none;}")
 
-    def toplevelchanged(self):
-        # TODO this does not yet work!!
-        print("level changed", self.canvas.width(), self.canvas.height())
-        sh = self.layout.sizeHint()
-        dsh = self.menu_dock.sizeHint()
-
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,
-                                           QtWidgets.QSizePolicy.Fixed)
-        self.canvas.setSizePolicy(sizePolicy)
+        #self.titlebar.transparentQ.clicked.connect(self.cb_transparentQ)
 
 
-        if self.menu_dock.isFloating():
-            self.resize(self.width(), sh.height())
+    def cb_showhide(self):
+        if self.menu_window.isVisible():
+            self.menu_window.hide()
         else:
-            self.resize(self.width(), self.height() + dsh.height())
+            self.menu_window.show()
 
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding,
-                                           QtWidgets.QSizePolicy.Expanding)
-        self.canvas.setSizePolicy(sizePolicy)
+    def cb_transparentQ(self):
+        if self.menu_window.out_alpha == 1:
+            self.menu_window.out_alpha = 0.25
+            self.menu_window.setFocus()
+            self.titlebar.transparentQ.setIcon(QtGui.QIcon(str(iconpath / "eye_closed.png")))
+
+        else:
+            self.menu_window.out_alpha = 1
+            self.menu_window.setFocus()
+            self.titlebar.transparentQ.setIcon(QtGui.QIcon(str(iconpath / "eye_open.png")))
+
+
+    # def toplevelchanged(self):
+    #     # TODO this does not yet work!!
+    #     print("level changed", self.canvas.width(), self.canvas.height())
+    #     sh = self.layout.sizeHint()
+    #     dsh = self.menu_dock.sizeHint()
+
+    #     sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed,
+    #                                        QtWidgets.QSizePolicy.Fixed)
+    #     self.canvas.setSizePolicy(sizePolicy)
+
+
+    #     if self.menu_dock.isFloating():
+    #         self.resize(self.width(), sh.height())
+    #     else:
+    #         self.resize(self.width(), self.height() + dsh.height())
+
+    #     sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding,
+    #                                        QtWidgets.QSizePolicy.Expanding)
+    #     self.canvas.setSizePolicy(sizePolicy)
 
 
     def center(self):
@@ -191,6 +279,18 @@ class MainWindow(EOmapsWindow):
     def m(self):
         # the EOmaps maps-object
         return self.canvas.m
+
+
+    def focusInEvent(self, e):
+        self.menu_window.show()
+        super().focusInEvent(e)
+
+    def focusOutEvent(self, e):
+        self.menu_window.show()
+        super().focusInEvent(e)
+
+
+
 
 def run(m=None):
     app = QtWidgets.QApplication(sys.argv)
