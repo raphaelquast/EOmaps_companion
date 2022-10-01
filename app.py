@@ -22,7 +22,7 @@ class ControlTabs(QtWidgets.QTabWidget):
         tab1 = QtWidgets.QWidget()
         tab1layout = QtWidgets.QVBoxLayout()
 
-        peektabs = PeekTabs(parent= self.parent)
+        peektabs = PeekTabs(parent=self.parent)
         tab1layout.addWidget(peektabs)
 
         try:
@@ -36,25 +36,22 @@ class ControlTabs(QtWidgets.QTabWidget):
 
         tab1.setLayout(tab1layout)
 
-
         self.tab1 = tab1
         self.tab2 = OpenFileTabs(parent=self.parent)
         self.tab3 = DrawerWidget(parent=self.parent)
-
 
         self.tab6 = ArtistEditor(m=self.m)
 
         self.addTab(self.tab1, "Compare")
         self.addTab(self.tab6, "Edit")
         self.addTab(self.tab2, "Open Files")
-        if hasattr(self.m.util, "draw"):   # for future "draw" capabilities
+        if hasattr(self.m.util, "draw"):  # for future "draw" capabilities
             self.addTab(self.tab3, "Draw Shapes")
 
         # re-populate artists on tab-change
         self.currentChanged.connect(self.tabchanged)
 
         self.setAcceptDrops(True)
-
 
     def tabchanged(self):
         if self.currentWidget() == self.tab6:
@@ -64,7 +61,6 @@ class ControlTabs(QtWidgets.QTabWidget):
     @property
     def m(self):
         return self.parent.m
-
 
     def dragEnterEvent(self, e):
         # switch to open-file-tab on drag-enter
@@ -82,9 +78,10 @@ class ToolBar(QtWidgets.QToolBar):
         logo = QtGui.QPixmap(str(iconpath / "logo.png"))
         logolabel = QtWidgets.QLabel()
         logolabel.setMaximumHeight(25)
-        logolabel.setAlignment(Qt.AlignBottom|Qt.AlignRight)
-        logolabel.setPixmap(logo.scaled(logolabel.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
-
+        logolabel.setAlignment(Qt.AlignBottom | Qt.AlignRight)
+        logolabel.setPixmap(
+            logo.scaled(logolabel.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        )
 
         showlayer = AutoUpdateLayerMenuButton(m=self.m)
 
@@ -94,14 +91,15 @@ class ToolBar(QtWidgets.QToolBar):
         b_close.setText("🞫")
         b_close.clicked.connect(self.close_button_callback)
 
-
         self.transparentQ = QtWidgets.QToolButton()
         self.transparentQ.setStyleSheet("border:none")
         self.transparentQ.setToolTip("Make window semi-transparent.")
         self.transparentQ.setIcon(QtGui.QIcon(str(iconpath / "eye_closed.png")))
 
         space = QtWidgets.QWidget()
-        space.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        space.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding
+        )
 
         self.addWidget(self.transparentQ)
         self.addWidget(space)
@@ -111,10 +109,11 @@ class ToolBar(QtWidgets.QToolBar):
 
         self.setMovable(False)
 
-        self.setStyleSheet("QToolBar{border: none; spacing:20px;}"
-                           'QToolButton[autoRaise="true"]{text-align:center; color: red;}'
-                           "QPushButton{border:none;}"
-                           )
+        self.setStyleSheet(
+            "QToolBar{border: none; spacing:20px;}"
+            'QToolButton[autoRaise="true"]{text-align:center; color: red;}'
+            "QPushButton{border:none;}"
+        )
         self.setContentsMargins(5, 0, 0, 5)
 
     def close_button_callback(self):
@@ -129,7 +128,9 @@ class transparentWindow(ResizableWindow):
         # make sure the window does not steal focus from the matplotlib-canvas
         # on show (otherwise callbacks are inactive as long as the window is focused!)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
-        self.setWindowFlags(Qt.FramelessWindowHint|Qt.Dialog|Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(
+            Qt.FramelessWindowHint | Qt.Dialog | Qt.WindowStaysOnTopHint
+        )
 
     def focusInEvent(self, e):
         self.setWindowOpacity(1)
@@ -160,17 +161,18 @@ class MenuWindow(transparentWindow):
         tabs = ControlTabs(parent=self)
         tabs.setMouseTracking(True)
 
-        self.setStyleSheet("""QToolTip {
+        self.setStyleSheet(
+            """QToolTip {
                                 font-family: "SansSerif";
                                 font-size:10;
                                 background-color: rgb(53, 53, 53);
                                 color: white;
                                 border: none;
-                                }""")
+                                }"""
+        )
         self.cb_transparentQ()
 
         sizegrip = QtWidgets.QSizeGrip(self)
-
 
         menu_layout = QtWidgets.QVBoxLayout()
         menu_layout.addWidget(tabs)
@@ -187,14 +189,17 @@ class MenuWindow(transparentWindow):
 
         self.show()
 
-
     def cb_transparentQ(self):
         if self.out_alpha == 1:
             self.out_alpha = 0.25
             self.setFocus()
-            self.toolbar.transparentQ.setIcon(QtGui.QIcon(str(iconpath / "eye_closed.png")))
+            self.toolbar.transparentQ.setIcon(
+                QtGui.QIcon(str(iconpath / "eye_closed.png"))
+            )
 
         else:
             self.out_alpha = 1
             self.setFocus()
-            self.toolbar.transparentQ.setIcon(QtGui.QIcon(str(iconpath / "eye_open.png")))
+            self.toolbar.transparentQ.setIcon(
+                QtGui.QIcon(str(iconpath / "eye_open.png"))
+            )

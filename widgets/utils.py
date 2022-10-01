@@ -5,6 +5,8 @@ from functools import lru_cache
 
 
 import matplotlib.pyplot as plt
+
+
 @lru_cache()
 def get_cmap_pixmaps():
     # cache the pixmaps for matplotlib colormaps
@@ -23,8 +25,10 @@ def get_cmap_pixmaps():
 
     return cmap_pixmaps
 
+
 def str_to_bool(val):
     return val == "True"
+
 
 def to_float_none(s):
     if len(s) > 0:
@@ -32,24 +36,26 @@ def to_float_none(s):
     else:
         return None
 
+
 def show_error_popup(text=None, info=None, title=None, details=None):
-   global msg
-   msg = QtWidgets.QMessageBox()
-   msg.setIcon(QtWidgets.QMessageBox.Critical)
+    global msg
+    msg = QtWidgets.QMessageBox()
+    msg.setIcon(QtWidgets.QMessageBox.Critical)
 
-   if text:
-       msg.setText(text)
-   if info:
-       msg.setInformativeText(info)
-   if title:
-       msg.setWindowTitle(title)
-   if details:
-       msg.setDetailedText(details)
+    if text:
+        msg.setText(text)
+    if info:
+        msg.setInformativeText(info)
+    if title:
+        msg.setWindowTitle(title)
+    if details:
+        msg.setDetailedText(details)
 
-   msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
-   msg.setWindowFlags(Qt.Dialog|Qt.WindowStaysOnTopHint)
+    msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+    msg.setWindowFlags(Qt.Dialog | Qt.WindowStaysOnTopHint)
 
-   msg.show()
+    msg.show()
+
 
 def get_crs(crs):
 
@@ -70,9 +76,12 @@ def get_crs(crs):
         Maps.get_crs(Maps, crs)
     except Exception:
         import traceback
-        show_error_popup(text=f"{crs} is not a valid crs specifier",
-                         title="Unable to identify crs",
-                         details=traceback.format_exc())
+
+        show_error_popup(
+            text=f"{crs} is not a valid crs specifier",
+            title="Unable to identify crs",
+            details=traceback.format_exc(),
+        )
     return crs
 
 
@@ -88,7 +97,6 @@ class LineEditComplete(QtWidgets.QLineEdit):
         completer = QtWidgets.QCompleter(self._options)
         self.setCompleter(completer)
 
-
     def mousePressEvent(self, event):
         super().mousePressEvent(event)
         if self._options is not None:
@@ -102,12 +110,14 @@ class InputCRS(LineEditComplete):
         """
         A QtWidgets.QLineEdit widget with autocompletion for available CRS
         """
-        super().__init__(*args,**kwargs)
+        super().__init__(*args, **kwargs)
 
-        crs_options = ["Maps.CRS." + key for key, val in Maps.CRS.__dict__.items()
-                       if not key.startswith("_")
-                       and (isinstance(val, Maps.CRS.ABCMeta)
-                            or isinstance(val, Maps.CRS.CRS))]
+        crs_options = [
+            "Maps.CRS." + key
+            for key, val in Maps.CRS.__dict__.items()
+            if not key.startswith("_")
+            and (isinstance(val, Maps.CRS.ABCMeta) or isinstance(val, Maps.CRS.CRS))
+        ]
         self.set_complete_vals(crs_options)
         self.setPlaceholderText("4326")
 
@@ -129,7 +139,7 @@ class CmapDropdown(QtWidgets.QComboBox):
         for label, cmap in get_cmap_pixmaps():
             self.addItem(label, cmap)
 
-        self.setStyleSheet("combobox-popup: 0;");
+        self.setStyleSheet("combobox-popup: 0;")
         self.setMaxVisibleItems(10)
         idx = self.findText(startcmap)
         if idx != -1:
@@ -138,6 +148,7 @@ class CmapDropdown(QtWidgets.QComboBox):
     def wheelEvent(self, e):
         # ignore mouse-wheel events to disable changing the colormap with the mousewheel
         pass
+
 
 class GetColorWidget(QtWidgets.QFrame):
     def __init__(self, facecolor="#ff0000", edgecolor="#000000", linewidth=1, alpha=1):
@@ -174,55 +185,57 @@ class GetColorWidget(QtWidgets.QFrame):
         self.linewidth = linewidth
         self.alpha = alpha
 
-
         self.setMinimumSize(15, 15)
         self.setMaximumSize(100, 100)
 
+        self.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding
+        )
 
-        self.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
-                           QtWidgets.QSizePolicy.Expanding)
+        self.setToolTip(
+            "<b>click</b>: set facecolor <br> <b>alt + click</b>: set edgecolor"
+        )
 
-
-        self.setToolTip("<b>click</b>: set facecolor <br> <b>alt + click</b>: set edgecolor")
-
-        self.setStyleSheet("""QToolTip {
+        self.setStyleSheet(
+            """QToolTip {
                            font-family: "SansSerif";
                            font-size:10;
                            background-color: rgb(53, 53, 53);
                            color: white;
                            border: none;
-                           }""")
-
+                           }"""
+        )
 
     def resizeEvent(self, e):
         # make frame rectangular
         self.setMaximumHeight(self.width())
 
-
     def paintEvent(self, e):
         super().paintEvent(e)
         painter = QtGui.QPainter(self)
 
-        painter.setRenderHints(QtGui.QPainter.HighQualityAntialiasing )
+        painter.setRenderHints(QtGui.QPainter.HighQualityAntialiasing)
         size = self.size()
 
         if self.linewidth > 0.01:
-            painter.setPen(QtGui.QPen(self.edgecolor, 1.1*self.linewidth, Qt.SolidLine))
+            painter.setPen(
+                QtGui.QPen(self.edgecolor, 1.1 * self.linewidth, Qt.SolidLine)
+            )
         else:
-            painter.setPen(QtGui.QPen(self.facecolor, 1.1*self.linewidth, Qt.SolidLine))
+            painter.setPen(
+                QtGui.QPen(self.facecolor, 1.1 * self.linewidth, Qt.SolidLine)
+            )
 
         painter.setBrush(QtGui.QBrush(self.facecolor, Qt.SolidPattern))
 
         w, h = size.width(), size.height()
         s = min(min(0.9 * h, 0.9 * w), 100)
-        rect = QRectF(w/2 - s/2, h/2 - s/2, s, s)
-        painter.drawRoundedRect(rect, s/5, s/5)
+        rect = QRectF(w / 2 - s / 2, h / 2 - s / 2, s, s)
+        painter.drawRoundedRect(rect, s / 5, s / 5)
 
         # painter.setFont(QtGui.QFont("Arial", 7))
         # painter.drawText(0, 0, w, h, Qt.AlignCenter,
         #                  f"α:  {self.alpha:.2f}" + "\n" + f"lw: {self.linewidth:.2f}")
-
-
 
     def mousePressEvent(self, event):
         modifiers = QtWidgets.QApplication.keyboardModifiers()
@@ -270,8 +283,8 @@ class GetColorWidget(QtWidgets.QFrame):
         if isinstance(color, str):
             color = QtGui.QColor(color)
 
-        #color = QtGui.QColor(*color.getRgb()[:3], int(self.alpha * 255))
-        #color = QtGui.QColor(*color.getRgbF())
+        # color = QtGui.QColor(*color.getRgb()[:3], int(self.alpha * 255))
+        # color = QtGui.QColor(*color.getRgbF())
 
         self.edgecolor = color
         self.update()
@@ -282,8 +295,10 @@ class GetColorWidget(QtWidgets.QFrame):
 
     def set_alpha(self, alpha):
         self.alpha = alpha
-        self.set_facecolor(QtGui.QColor(*self.facecolor.getRgb()[:3], int(self.alpha * 255)))
-        #self.set_edgecolor(QtGui.QColor(*self.edgecolor.getRgb()[:3], int(self.alpha * 255)))
+        self.set_facecolor(
+            QtGui.QColor(*self.facecolor.getRgb()[:3], int(self.alpha * 255))
+        )
+        # self.set_edgecolor(QtGui.QColor(*self.edgecolor.getRgb()[:3], int(self.alpha * 255)))
 
 
 class EditLayoutButton(QtWidgets.QPushButton):
@@ -301,7 +316,6 @@ class EditLayoutButton(QtWidgets.QPushButton):
             self.m._layout_editor._undo_draggable()
 
 
-
 class AlphaSlider(QtWidgets.QSlider):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -314,25 +328,25 @@ class AlphaSlider(QtWidgets.QSlider):
         self.setTickPosition(QtWidgets.QSlider.TicksBothSides)
         self.setValue(100)
 
-        #self.setMinimumWidth(50)
+        # self.setMinimumWidth(50)
         self.setMaximumWidth(300)
-        self.setSizePolicy(QtWidgets.QSizePolicy.MinimumExpanding,
-                           QtWidgets.QSizePolicy.Minimum)
+        self.setSizePolicy(
+            QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.Minimum
+        )
 
         self.valueChanged.connect(self.value_changed)
 
-
         self.setToolTip("Opacity")
 
-        self.setStyleSheet("""QToolTip {
+        self.setStyleSheet(
+            """QToolTip {
                            font-family: "SansSerif";
                            font-size:10;
                            background-color: rgb(53, 53, 53);
                            color: white;
                            border: none;
-                           }""")
-
-
+                           }"""
+        )
 
     def value_changed(self, i):
-        self.alpha = i/100
+        self.alpha = i / 100

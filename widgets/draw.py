@@ -3,14 +3,14 @@ from PyQt5.QtCore import Qt
 
 from .utils import GetColorWidget, AlphaSlider
 
+
 class DrawerWidget(QtWidgets.QWidget):
 
     _polynames = {
-                  "Polygon": "polygon",
-                  "Rectangle": "rectangle",
-                  "Circle": "circle",
-                  }
-
+        "Polygon": "polygon",
+        "Rectangle": "rectangle",
+        "Circle": "circle",
+    }
 
     def __init__(self, parent=None):
 
@@ -29,19 +29,22 @@ class DrawerWidget(QtWidgets.QWidget):
             self.shapeselector.addItem(key)
         self.shapeselector.activated[str].connect(self.set_poly_type)
 
-        b1 = QtWidgets.QPushButton('Draw!')
+        b1 = QtWidgets.QPushButton("Draw!")
         b1.clicked.connect(self.draw_shape_callback)
 
         self.colorselector = GetColorWidget()
 
         self.alphaslider = AlphaSlider(Qt.Horizontal)
-        self.alphaslider.valueChanged.connect(lambda i: self.colorselector.set_alpha(i / 100))
+        self.alphaslider.valueChanged.connect(
+            lambda i: self.colorselector.set_alpha(i / 100)
+        )
         self.alphaslider.setValue(100)
 
         self.linewidthslider = AlphaSlider(Qt.Horizontal)
-        self.linewidthslider.valueChanged.connect(lambda i: self.colorselector.set_linewidth(i / 10))
+        self.linewidthslider.valueChanged.connect(
+            lambda i: self.colorselector.set_linewidth(i / 10)
+        )
         self.linewidthslider.setValue(20)
-
 
         layout = QtWidgets.QGridLayout()
 
@@ -55,7 +58,6 @@ class DrawerWidget(QtWidgets.QWidget):
         layout.setAlignment(Qt.AlignCenter)
         self.setLayout(layout)
 
-
     def set_poly_type(self, s):
         self._use_poly_type = self._polynames[s]
 
@@ -63,11 +65,11 @@ class DrawerWidget(QtWidgets.QWidget):
 
         p = self.m.util.draw.new_poly()
         getattr(p, self._use_poly_type)(
-            facecolor = self.colorselector.facecolor.name(),
-            edgecolor = self.colorselector.edgecolor.name(),
+            facecolor=self.colorselector.facecolor.name(),
+            edgecolor=self.colorselector.edgecolor.name(),
             alpha=self.alphaslider.alpha,
-            linewidth=self.linewidthslider.alpha * 10
-            )
+            linewidth=self.linewidthslider.alpha * 10,
+        )
 
     @property
     def m(self):

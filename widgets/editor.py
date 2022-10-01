@@ -8,7 +8,6 @@ from ..common import iconpath
 from PyQt5.QtCore import Qt
 
 
-
 class AddFeaturesMenuButton(QtWidgets.QPushButton):
     def __init__(self, *args, m=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -16,21 +15,19 @@ class AddFeaturesMenuButton(QtWidgets.QPushButton):
         self.m = m
 
         self.props = dict(
-        #alpha = 1,
-        facecolor = "r",
-        edgecolor = "g",
-        linewidth = 1,
-        zorder=0,
+            # alpha = 1,
+            facecolor="r",
+            edgecolor="g",
+            linewidth=1,
+            zorder=0,
         )
-
 
         feature_types = [i for i in dir(self.m.add_feature) if not i.startswith("_")]
         self.setText("Add Feature")
-        #self.setMaximumWidth(200)
+        # self.setMaximumWidth(200)
 
         width = self.fontMetrics().boundingRect(self.text()).width()
         self.setFixedWidth(width * 1.6)
-
 
         feature_menu = QtWidgets.QMenu()
         feature_menu.setStyleSheet("QMenu { menu-scrollable: 1;}")
@@ -39,17 +36,24 @@ class AddFeaturesMenuButton(QtWidgets.QPushButton):
             try:
                 sub_menu = feature_menu.addMenu(featuretype)
 
-                sub_features = [i for i in dir(getattr(self.m.add_feature, featuretype)) if not i.startswith("_")]
+                sub_features = [
+                    i
+                    for i in dir(getattr(self.m.add_feature, featuretype))
+                    if not i.startswith("_")
+                ]
                 for feature in sub_features:
                     action = sub_menu.addAction(str(feature))
-                    action.triggered.connect(self.menu_callback_factory(featuretype, feature))
+                    action.triggered.connect(
+                        self.menu_callback_factory(featuretype, feature)
+                    )
             except:
                 print("there was a problem with the NaturalEarth feature", featuretype)
                 continue
 
         self.setMenu(feature_menu)
-        self.clicked.connect(lambda:feature_menu.popup(self.mapToGlobal(self.menu_button.pos())))
-
+        self.clicked.connect(
+            lambda: feature_menu.popup(self.mapToGlobal(self.menu_button.pos()))
+        )
 
     def menu_callback_factory(self, featuretype, feature):
         def cb():
@@ -58,29 +62,28 @@ class AddFeaturesMenuButton(QtWidgets.QPushButton):
                 return
             try:
                 getattr(getattr(self.m.add_feature, featuretype), feature)(
-                    layer = self.m.BM.bg_layer, **self.props)
+                    layer=self.m.BM.bg_layer, **self.props
+                )
 
                 self.m.BM.update()
             except Exception:
                 import traceback
-                print("---- adding the feature", featuretype, feature, "did not work----")
-                print(traceback.format_exc())
 
+                print(
+                    "---- adding the feature", featuretype, feature, "did not work----"
+                )
+                print(traceback.format_exc())
 
         return cb
 
 
-
-
 class AddFeatureWidget(QtWidgets.QFrame):
-
     def __init__(self, m=None):
 
         super().__init__()
         self.setFrameStyle(QtWidgets.QFrame.StyledPanel | QtWidgets.QFrame.Plain)
 
         self.m = m
-
 
         self.selector = AddFeaturesMenuButton(m=self.m)
         self.selector.clicked.connect(self.update_props)
@@ -89,38 +92,42 @@ class AddFeatureWidget(QtWidgets.QFrame):
         self.colorselector.cb_colorselected = self.update_on_color_selection
 
         self.alphaslider = AlphaSlider(Qt.Horizontal)
-        self.alphaslider.valueChanged.connect(lambda i: self.colorselector.set_alpha(i / 100))
+        self.alphaslider.valueChanged.connect(
+            lambda i: self.colorselector.set_alpha(i / 100)
+        )
         self.alphaslider.valueChanged.connect(self.update_props)
 
         self.linewidthslider = AlphaSlider(Qt.Horizontal)
-        self.linewidthslider.valueChanged.connect(lambda i: self.colorselector.set_linewidth(i / 10))
+        self.linewidthslider.valueChanged.connect(
+            lambda i: self.colorselector.set_linewidth(i / 10)
+        )
         self.linewidthslider.valueChanged.connect(self.update_props)
-
 
         self.zorder = QtWidgets.QLineEdit("0")
         validator = QtGui.QIntValidator()
         self.zorder.setValidator(validator)
         self.zorder.setMaximumWidth(30)
-        self.zorder.setSizePolicy(QtWidgets.QSizePolicy.Minimum,
-                                   QtWidgets.QSizePolicy.Minimum)
+        self.zorder.setSizePolicy(
+            QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum
+        )
         self.zorder.textChanged.connect(self.update_props)
 
         zorder_label = QtWidgets.QLabel("zorder: ")
-        zorder_label.setSizePolicy(QtWidgets.QSizePolicy.Minimum,
-                                   QtWidgets.QSizePolicy.Minimum)
+        zorder_label.setSizePolicy(
+            QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum
+        )
 
         zorder_layout = QtWidgets.QHBoxLayout()
         zorder_layout.addWidget(zorder_label)
         zorder_layout.addWidget(self.zorder)
-        zorder_label.setAlignment(Qt.AlignRight|Qt.AlignCenter)
+        zorder_label.setAlignment(Qt.AlignRight | Qt.AlignCenter)
 
         layout = QtWidgets.QGridLayout()
-        layout.addWidget(self.colorselector,   0, 0, 2, 1)
-        layout.addWidget(self.alphaslider,     0, 1)
+        layout.addWidget(self.colorselector, 0, 0, 2, 1)
+        layout.addWidget(self.alphaslider, 0, 1)
         layout.addWidget(self.linewidthslider, 1, 1)
-        layout.addLayout(zorder_layout,        0, 2)
-        layout.addWidget(self.selector,        1, 2)
-
+        layout.addLayout(zorder_layout, 0, 2)
+        layout.addWidget(self.selector, 1, 2)
 
         # set stretch factor to expand the color-selector first
         layout.setColumnStretch(0, 1)
@@ -134,23 +141,22 @@ class AddFeatureWidget(QtWidgets.QFrame):
 
         self.update_props()
 
-
     def update_on_color_selection(self):
         self.update_alphaslider()
         self.update_props()
 
     def update_alphaslider(self):
         # to always round up to closest int use -(-x//1)
-        self.alphaslider.setValue(-(-self.colorselector.alpha*100//1))
+        self.alphaslider.setValue(-(-self.colorselector.alpha * 100 // 1))
 
     def update_props(self):
         self.selector.props.update(
             dict(
-            facecolor= self.colorselector.facecolor.getRgbF(),
-            edgecolor = self.colorselector.edgecolor.getRgbF(),
-            linewidth = self.linewidthslider.alpha * 5,
-            zorder = int(self.zorder.text()),
-            #alpha = self.alphaslider.alpha,   # don't specify alpha! it interferes with the alpha of the colors!
+                facecolor=self.colorselector.facecolor.getRgbF(),
+                edgecolor=self.colorselector.edgecolor.getRgbF(),
+                linewidth=self.linewidthslider.alpha * 5,
+                zorder=int(self.zorder.text()),
+                # alpha = self.alphaslider.alpha,   # don't specify alpha! it interferes with the alpha of the colors!
             )
         )
 
@@ -190,8 +196,10 @@ class NewLayerWidget(QtWidgets.QFrame):
     def new_layer(self):
         layer = self.new_layer_name.text()
         if len(layer) == 0:
-            QtWidgets.QToolTip.showText(self.mapToGlobal(self.new_layer_name.pos()),
-                                        "Type a layer-name and press return!")
+            QtWidgets.QToolTip.showText(
+                self.mapToGlobal(self.new_layer_name.pos()),
+                "Type a layer-name and press return!",
+            )
             return
 
         m2 = self.m.new_layer(layer)
@@ -210,9 +218,8 @@ class ArtistEditor(QtWidgets.QWidget):
 
         self.tabs = QtWidgets.QTabWidget()
 
-        newlayer = NewLayerWidget(m = self.m)
+        newlayer = NewLayerWidget(m=self.m)
         newlayer.new_layer_name.returnPressed.connect(self.populate)
-
 
         splitter = QtWidgets.QSplitter(Qt.Vertical)
         splitter.addWidget(newlayer)
@@ -240,7 +247,6 @@ class ArtistEditor(QtWidgets.QWidget):
         self.m.BM._on_add_bg_artist.append(self.populate)
         self.m.BM._on_remove_bg_artist.append(self.populate)
 
-
     def close_handler(self, index):
         layer = self.tabs.tabText(index)
 
@@ -249,12 +255,12 @@ class ArtistEditor(QtWidgets.QWidget):
         self._msg.setText(f"Do you really want to delete the layer '{layer}'")
         self._msg.setWindowTitle(f"Delete layer: '{layer}'?")
 
-        self._msg.setStandardButtons(QtWidgets.QMessageBox.Yes|QtWidgets.QMessageBox.No)
-        self._msg.buttonClicked.connect(lambda : self.do_close_tab(index))
+        self._msg.setStandardButtons(
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+        )
+        self._msg.buttonClicked.connect(lambda: self.do_close_tab(index))
 
         ret = self._msg.show()
-
-
 
     def do_close_tab(self, index):
 
@@ -267,11 +273,9 @@ class ArtistEditor(QtWidgets.QWidget):
             print("can't delete the base-layer")
             return
 
-
         for m in list(self.m._children):
             if layer == m.layer:
                 m.cleanup()
-
 
         if self.m.BM._bg_layer == layer:
             try:
@@ -295,7 +299,6 @@ class ArtistEditor(QtWidgets.QWidget):
         if layer in self.m.BM._on_layer_activation:
             del self.m.BM._on_layer_activation[layer]
 
-
         self.populate()
 
     def color_active_tab(self, m=None, l=None):
@@ -306,7 +309,11 @@ class ArtistEditor(QtWidgets.QWidget):
             layer = self.tabs.tabText(i)
 
             active_layers = self.m.BM._bg_layer.split("|")
-            color = QtGui.QColor(100,200,100) if len(active_layers) == 1 else QtGui.QColor(200,100,100)
+            color = (
+                QtGui.QColor(100, 200, 100)
+                if len(active_layers) == 1
+                else QtGui.QColor(200, 100, 100)
+            )
             if layer in active_layers:
                 self.tabs.tabBar().setTabTextColor(i, color)
             else:
@@ -320,10 +327,12 @@ class ArtistEditor(QtWidgets.QWidget):
             label.setToolTip(name)
         else:
             label = QtWidgets.QLabel(name)
-        label.setStyleSheet("border-radius: 5px;"
-                            "border-style: solid;"
-                            "border-width: 1px;"
-                            "border-color: rgba(0, 0, 0,100);")
+        label.setStyleSheet(
+            "border-radius: 5px;"
+            "border-style: solid;"
+            "border-width: 1px;"
+            "border-color: rgba(0, 0, 0,100);"
+        )
         label.setAlignment(Qt.AlignCenter)
         label.setMaximumHeight(25)
 
@@ -367,7 +376,7 @@ class ArtistEditor(QtWidgets.QWidget):
             b_a.setMinimumWidth(25)
             b_a.setMaximumWidth(50)
 
-            validator = QtGui.QDoubleValidator(0., 1., 3)
+            validator = QtGui.QDoubleValidator(0.0, 1.0, 3)
             validator.setLocale(QtCore.QLocale("en_US"))
 
             b_a.setValidator(validator)
@@ -375,7 +384,6 @@ class ArtistEditor(QtWidgets.QWidget):
             b_a.returnPressed.connect(self.set_alpha(artist=a, layer=layer, widget=b_a))
         else:
             l_a, b_a = None, None
-
 
         # linewidth
         try:
@@ -397,35 +405,41 @@ class ArtistEditor(QtWidgets.QWidget):
 
                 b_lw.setValidator(validator)
                 b_lw.setText(str(lw))
-                b_lw.returnPressed.connect(self.set_linewidth(artist=a, layer=layer, widget=b_lw))
+                b_lw.returnPressed.connect(
+                    self.set_linewidth(artist=a, layer=layer, widget=b_lw)
+                )
             else:
                 l_lw, b_lw = None, None
         except Exception:
             l_lw, b_lw = None, None
 
-
         # color
         from .utils import GetColorWidget
+
         try:
             facecolor = a.get_facecolor()
             edgecolor = a.get_edgecolor()
             if facecolor.shape[0] != 1:
-                facecolor = (0,0,0,0)
+                facecolor = (0, 0, 0, 0)
                 use_cmap = True
             else:
-                facecolor = (facecolor.squeeze()*255).tolist()
+                facecolor = (facecolor.squeeze() * 255).tolist()
                 use_cmap = False
 
             if edgecolor.shape[0] != 1:
-                edgecolor = (0,0,0,0)
+                edgecolor = (0, 0, 0, 0)
             else:
-                edgecolor = (edgecolor.squeeze()*255).tolist()
+                edgecolor = (edgecolor.squeeze() * 255).tolist()
 
             b_c = GetColorWidget(facecolor=facecolor, edgecolor=edgecolor)
-            b_c.cb_colorselected = self.set_color(artist=a, layer=layer, colorwidget=b_c)
+            b_c.cb_colorselected = self.set_color(
+                artist=a, layer=layer, colorwidget=b_c
+            )
             b_c.setFrameStyle(QtWidgets.QFrame.StyledPanel | QtWidgets.QFrame.Plain)
 
-            b_c.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+            b_c.setSizePolicy(
+                QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum
+            )
             b_c.setMaximumWidth(25)
 
         except:
@@ -433,22 +447,21 @@ class ArtistEditor(QtWidgets.QWidget):
             use_cmap = True
             pass
 
-
         # cmap
         from .utils import CmapDropdown
+
         if use_cmap is True:
             try:
                 cmap = a.get_cmap()
                 b_cmap = CmapDropdown(startcmap=cmap.name)
-                b_cmap.activated.connect(self.set_cmap(artist=a, layer=layer, widget=b_cmap))
+                b_cmap.activated.connect(
+                    self.set_cmap(artist=a, layer=layer, widget=b_cmap)
+                )
             except:
                 b_cmap = None
                 pass
         else:
             b_cmap = None
-
-
-
 
         # layout = QtWidgets.QHBoxLayout()
         # layout.addWidget(b_sh)  # show hide
@@ -466,16 +479,15 @@ class ArtistEditor(QtWidgets.QWidget):
 
         # layout.addWidget(b_r)      # remove
 
-
         layout = []
         layout.append((b_sh, 0))  # show hide
         if b_c is not None:
-            layout.append((b_c, 1))   # color
+            layout.append((b_c, 1))  # color
         layout.append((b_z, 2))  # zorder
 
-        layout.append((label, 3)) # title
+        layout.append((label, 3))  # title
         if b_lw is not None:
-            layout.append((b_lw, 4))   # linewidth
+            layout.append((b_lw, 4))  # linewidth
 
         if b_a is not None:
             layout.append((b_a, 5))  # alpha
@@ -483,11 +495,9 @@ class ArtistEditor(QtWidgets.QWidget):
         if b_cmap is not None:
             layout.append((b_cmap, 5))  # cmap
 
-
-        layout.append((b_r, 6))      # remove
+        layout.append((b_r, 6))  # remove
 
         return layout
-
 
     def populate_layer(self):
         layer = self.tabs.tabText(self.tabs.currentIndex())
@@ -498,7 +508,7 @@ class ArtistEditor(QtWidgets.QWidget):
             return
 
         layout = QtWidgets.QGridLayout()
-        layout.setAlignment(Qt.AlignTop|Qt.AlignLeft)
+        layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 
         # make sure that we don't create an empty entry in the defaultdict!
         # TODO avoid using defaultdicts!!
@@ -507,8 +517,9 @@ class ArtistEditor(QtWidgets.QWidget):
         else:
             artists = []
 
-        for i, a in enumerate(sorted((*artists,
-                                      *self._hidden_artists.get(layer, [])), key=str)):
+        for i, a in enumerate(
+            sorted((*artists, *self._hidden_artists.get(layer, [])), key=str)
+        ):
 
             a_layout = self._get_artist_layout(a, layer)
             for art, pos in a_layout:
@@ -530,7 +541,7 @@ class ArtistEditor(QtWidgets.QWidget):
         for i, layer in enumerate(alllayers):
 
             layout = QtWidgets.QGridLayout()
-            layout.setAlignment(Qt.AlignTop|Qt.AlignLeft)
+            layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 
             if layer.startswith("_") or "|" in layer:
                 # make sure the currently opened tab is always added (even if empty)
@@ -546,11 +557,12 @@ class ArtistEditor(QtWidgets.QWidget):
             if layer == "all" or layer == self.m.layer:
                 tabbar = self.tabs.tabBar()
                 # don't show the close button for this tab
-                tabbar.setTabButton(self.tabs.count()-1, tabbar.RightSide, None)
-
+                tabbar.setTabButton(self.tabs.count() - 1, tabbar.RightSide, None)
 
         for i in range(self.tabs.count()):
-            self.tabs.setTabToolTip(i, "Use (control + click) to switch the visible layer!")
+            self.tabs.setTabToolTip(
+                i, "Use (control + click) to switch the visible layer!"
+            )
 
         try:
             # restore the previously opened tab
@@ -564,16 +576,16 @@ class ArtistEditor(QtWidgets.QWidget):
                         break
 
                 if found is False:
-                    print("Unable to restore previously opened tab " +
-                          f"'{self._current_tab_name}'!")
+                    print(
+                        "Unable to restore previously opened tab "
+                        + f"'{self._current_tab_name}'!"
+                    )
                     self.tabs.setCurrentIndex(self.m.BM._bg_layer)
         except:
             print("unable to activate tab")
             pass
 
         self.color_active_tab()
-
-
 
     def tabchanged(self, index):
         # TODO
@@ -624,6 +636,7 @@ class ArtistEditor(QtWidgets.QWidget):
             artist.set_edgecolor(colorwidget.edgecolor.getRgbF())
 
             self.m.redraw()
+
         return cb
 
     def _do_remove(self, artist, layer):
@@ -646,16 +659,18 @@ class ArtistEditor(QtWidgets.QWidget):
             self._msg.setIcon(QtWidgets.QMessageBox.Question)
             self._msg.setWindowTitle(f"Delete artist?")
             self._msg.setText(
-                "Do you really want to delete the following artist" +
-                f"from the layer '{layer}'?\n\n" +
-                f"    '{artist}'"
-                )
+                "Do you really want to delete the following artist"
+                + f"from the layer '{layer}'?\n\n"
+                + f"    '{artist}'"
+            )
 
-            self._msg.setStandardButtons(QtWidgets.QMessageBox.Yes|QtWidgets.QMessageBox.No)
-            self._msg.buttonClicked.connect(lambda : self._do_remove(artist, layer))
+            self._msg.setStandardButtons(
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+            )
+            self._msg.buttonClicked.connect(lambda: self._do_remove(artist, layer))
             ret = self._msg.show()
-        return cb
 
+        return cb
 
     def show_hide(self, artist, layer):
         def cb():
@@ -677,6 +692,7 @@ class ArtistEditor(QtWidgets.QWidget):
                     print("problem unhiding", artist, "from layer", layer)
 
             self.m.redraw()
+
         return cb
 
     def set_zorder(self, artist, layer, widget):

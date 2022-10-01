@@ -1,8 +1,18 @@
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt
 
+
 class AutoUpdateLayerDropdown(QtWidgets.QComboBox):
-    def __init__(self, *args, m=None, layers=None, exclude=None, use_active=False, empty_ok=True, **kwargs):
+    def __init__(
+        self,
+        *args,
+        m=None,
+        layers=None,
+        exclude=None,
+        use_active=False,
+        empty_ok=True,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
 
         self.m = m
@@ -46,7 +56,6 @@ class AutoUpdateLayerDropdown(QtWidgets.QComboBox):
         elif event.button() == Qt.LeftButton:
             self.update_layers()
 
-
         super().mousePressEvent(event)
 
     @property
@@ -54,13 +63,16 @@ class AutoUpdateLayerDropdown(QtWidgets.QComboBox):
         if self._layers is not None:
             return self._layers
         else:
-            return [i for i in self.m._get_layers(exclude = self._exclude) if not str(i).startswith("_")]
+            return [
+                i
+                for i in self.m._get_layers(exclude=self._exclude)
+                if not str(i).startswith("_")
+            ]
 
     def update_layers(self):
         layers = self.layers
         if set(layers) == set(self.last_layers):
             return
-
 
         self.last_layers = layers
         self.clear()
@@ -80,6 +92,7 @@ class AutoUpdateLayerDropdown(QtWidgets.QComboBox):
             idx = self.findText(self._last_active)
             if idx != -1:
                 self.setCurrentIndex(idx)
+
 
 class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
     def __init__(self, *args, m=None, layers=None, exclude=None, **kwargs):
@@ -102,7 +115,6 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
         self.update_layers()
 
         self.setToolTip("Use (control + click) to select multiple layers!")
-
 
     def get_uselayer(self):
         active_layers = []
@@ -134,17 +146,19 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
         if self._layers is not None:
             return self._layers
         else:
-            return [i for i in self.m._get_layers(exclude = self._exclude) if not str(i).startswith("_")]
-
+            return [
+                i
+                for i in self.m._get_layers(exclude=self._exclude)
+                if not str(i).startswith("_")
+            ]
 
     def update_display_text(self, l):
         txt = l.lstrip("_|")
         # make sure that we don't use too long labels as text
         if len(txt) > 50:
             txt = f"{len([1 for i in txt.split('|') if len(i) > 0])} layers visible"
-            #txt = txt[:50] + " ..."
+            # txt = txt[:50] + " ..."
         self.setText(txt)
-
 
     def update_visible_layer(self, m, l):
         # make sure to re-fetch layers first
@@ -153,7 +167,6 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
         self.update_display_text(l)
 
         self.checkorder = [i for i in l.split("|") if i != "_"]
-
 
     def actionClicked(self):
         # check if a keyboard modifier is pressed
@@ -168,8 +181,7 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
         text = action.text()
 
         # if no relevant modifier is pressed, just select single layers!
-        if not (modifiers == Qt.ShiftModifier or
-                modifiers == Qt.ControlModifier):
+        if not (modifiers == Qt.ShiftModifier or modifiers == Qt.ControlModifier):
 
             self.m.show_layer(text)
             self.checkorder = [text]
@@ -200,8 +212,6 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
             self.m.show_layer(text)
             self.checkorder = []
 
-
-
     def update_checkstatus(self):
         currlayer = str(self.m.BM.bg_layer)
         if "|" in currlayer:
@@ -225,7 +235,6 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
                 # re connect action trigger
                 w.stateChanged.connect(action.trigger)
 
-
     def update_layers(self):
         layers = self.layers
         if layers == self._last_layers:
@@ -242,7 +251,6 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
             active_layers = [i for i in currlayer.split("|") if i != "_"]
         else:
             active_layers = [currlayer]
-
 
         for key in layers:
             if key == "all":

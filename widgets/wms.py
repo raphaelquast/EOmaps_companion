@@ -1,19 +1,23 @@
 from PyQt5 import QtWidgets
 
 
-class WMS_OSM():
+class WMS_OSM:
     layer_prefix = "OSM_"
     name = "OpenStreetMap"
 
     def __init__(self, m=None):
         self.m = m
-        self.wmslayers = [key for key in self.m.add_wms.OpenStreetMap.add_layer.__dict__.keys()
-                          if not (key in ["m"] or key.startswith("_"))]
+        self.wmslayers = [
+            key
+            for key in self.m.add_wms.OpenStreetMap.add_layer.__dict__.keys()
+            if not (key in ["m"] or key.startswith("_"))
+        ]
 
     def do_add_layer(self, wmslayer, layer):
         getattr(self.m.add_wms.OpenStreetMap.add_layer, wmslayer)(layer=layer)
 
-class WMS_S2_cloudless():
+
+class WMS_S2_cloudless:
     layer_prefix = "S2_"
     name = "S2 cloudless"
 
@@ -25,21 +29,23 @@ class WMS_S2_cloudless():
         getattr(self.m.add_wms.S2_cloudless.add_layer, wmslayer)(layer=layer)
 
 
-class WMS_ESA_WorldCover():
+class WMS_ESA_WorldCover:
     layer_prefix = ""
     name = "ESA WorldCover"
 
     def __init__(self, m=None):
         self.m = m
-        self.wmslayers = [key for key in self.m.add_wms.ESA_WorldCover.layers
-                          if (key.startswith("WORLDCOVER") or key.startswith("COP"))
-                          ]
+        self.wmslayers = [
+            key
+            for key in self.m.add_wms.ESA_WorldCover.layers
+            if (key.startswith("WORLDCOVER") or key.startswith("COP"))
+        ]
 
     def do_add_layer(self, wmslayer, layer):
         getattr(self.m.add_wms.ESA_WorldCover.add_layer, wmslayer)(layer=layer)
 
 
-class WMS_S1GBM():
+class WMS_S1GBM:
     layer_prefix = "S1GBM_"
     name = "S1GBM"
 
@@ -58,10 +64,12 @@ class AddWMSMenuButton(QtWidgets.QPushButton):
         self.m = m
         self._new_layer = new_layer
 
-        wms_dict = {"OpenStreetMap": WMS_OSM,
-                    "S2 Cloudless": WMS_S2_cloudless,
-                    "ESA WorldCover": WMS_ESA_WorldCover,
-                    "S1GBM:": WMS_S1GBM}
+        wms_dict = {
+            "OpenStreetMap": WMS_OSM,
+            "S2 Cloudless": WMS_S2_cloudless,
+            "ESA WorldCover": WMS_ESA_WorldCover,
+            "S1GBM:": WMS_S1GBM,
+        }
 
         if self._new_layer:
             self.setText("Create new WebMap Layer")
@@ -86,8 +94,9 @@ class AddWMSMenuButton(QtWidgets.QPushButton):
             except:
                 print("there was a problem while fetching the WMS layer", wmsname)
         self.setMenu(feature_menu)
-        self.clicked.connect(lambda:feature_menu.popup(self.mapToGlobal(self.menu_button.pos())))
-
+        self.clicked.connect(
+            lambda: feature_menu.popup(self.mapToGlobal(self.menu_button.pos()))
+        )
 
     def menu_callback_factory(self, wms, wmslayer):
         if "|" in self.m.BM.bg_layer:

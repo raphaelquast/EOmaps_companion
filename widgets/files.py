@@ -3,39 +3,41 @@ from PyQt5.QtCore import Qt, QLocale
 from pathlib import Path
 
 from .utils import (
-    LineEditComplete, InputCRS, CmapDropdown, show_error_popup,
-    to_float_none, get_crs, str_to_bool
-    )
+    LineEditComplete,
+    InputCRS,
+    CmapDropdown,
+    show_error_popup,
+    to_float_none,
+    get_crs,
+    str_to_bool,
+)
 
 from ..base import NewWindow
+
 
 class ShapeSelector(QtWidgets.QWidget):
     _ignoreargs = ["shade_hook", "agg_hook"]
 
-    _argspecials = dict(aggregator = {"None": None},
-                        mask_radius = {"None": None})
+    _argspecials = dict(aggregator={"None": None}, mask_radius={"None": None})
 
-    _argtypes = dict(radius = (float, str),
-                     radius_crs = (int, str),
-                     n = (int,),
-                     mesh = (str_to_bool,),
-                     masked = (str_to_bool,),
-                     mask_radius = (float,),
-                     flat = (str_to_bool,),
-                     aggregator = (str,)
-                     )
+    _argtypes = dict(
+        radius=(float, str),
+        radius_crs=(int, str),
+        n=(int,),
+        mesh=(str_to_bool,),
+        masked=(str_to_bool,),
+        mask_radius=(float,),
+        flat=(str_to_bool,),
+        aggregator=(str,),
+    )
 
-
-    def __init__(self, *args, m=None, default_shape = "shade_raster", **kwargs):
+    def __init__(self, *args, m=None, default_shape="shade_raster", **kwargs):
         super().__init__(*args, **kwargs)
         self.m = m
         self.shape = default_shape
 
-
         self.layout = QtWidgets.QVBoxLayout()
         self.options = QtWidgets.QVBoxLayout()
-
-
 
         self.shape_selector = QtWidgets.QComboBox()
         for i in self.m.set_shape._shp_list:
@@ -46,7 +48,6 @@ class ShapeSelector(QtWidgets.QWidget):
         shapesel = QtWidgets.QHBoxLayout()
         shapesel.addWidget(label)
         shapesel.addWidget(self.shape_selector)
-
 
         self.layout.addLayout(shapesel)
         self.layout.addLayout(self.options)
@@ -83,17 +84,16 @@ class ShapeSelector(QtWidgets.QWidget):
 
         return out
 
-
     def shape_changed(self, s):
         self.shape = s
 
         import inspect
+
         signature = inspect.signature(getattr(self.m.set_shape, s))
 
         self.clear_item(self.options)
 
         self.options = QtWidgets.QVBoxLayout()
-
 
         self.paraminputs = dict()
         for key, val in signature.parameters.items():
@@ -136,15 +136,20 @@ class ShapeSelector(QtWidgets.QWidget):
                 self.clear_item(layout.itemAt(i))
 
 
-
-
 class PlotFileWidget(QtWidgets.QWidget):
 
     file_endings = None
     default_shape = "shade_raster"
 
-    def __init__(self, *args, parent=None, close_on_plot=True,
-                 attach_tab_after_plot=True, tab=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        parent=None,
+        close_on_plot=True,
+        attach_tab_after_plot=True,
+        tab=None,
+        **kwargs,
+    ):
         """
         A widget to add a layer from a file
 
@@ -164,7 +169,6 @@ class PlotFileWidget(QtWidgets.QWidget):
         """
         super().__init__(*args, **kwargs)
 
-
         self.parent = parent
         self.tab = tab
         self.attach_tab_after_plot = attach_tab_after_plot
@@ -175,10 +179,8 @@ class PlotFileWidget(QtWidgets.QWidget):
 
         self.file_path = None
 
-
-        self.b_plot = QtWidgets.QPushButton('Plot!', self)
+        self.b_plot = QtWidgets.QPushButton("Plot!", self)
         self.b_plot.clicked.connect(self.b_plot_file)
-
 
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
@@ -187,7 +189,6 @@ class PlotFileWidget(QtWidgets.QWidget):
         # self.file_info.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.file_info.setTextInteractionFlags(Qt.TextSelectableByMouse)
         scroll.setWidget(self.file_info)
-
 
         self.cb1 = QtWidgets.QCheckBox("Annotate on click")
         self.cb1.stateChanged.connect(self.b_add_annotate_cb)
@@ -202,7 +203,7 @@ class PlotFileWidget(QtWidgets.QWidget):
         self.t1 = QtWidgets.QLineEdit()
         self.t1.setPlaceholderText(str(self.m.BM.bg_layer))
 
-        self.shape_selector= ShapeSelector(m=self.m, default_shape=self.default_shape)
+        self.shape_selector = ShapeSelector(m=self.m, default_shape=self.default_shape)
 
         self.setlayername = QtWidgets.QWidget()
         layername = QtWidgets.QHBoxLayout()
@@ -235,7 +236,6 @@ class PlotFileWidget(QtWidgets.QWidget):
         minmaxlayout.addWidget(self.vmax)
         minmaxlayout.addWidget(minmaxupdate, Qt.AlignRight)
 
-
         options = QtWidgets.QVBoxLayout()
         options.addWidget(self.cb1)
         options.addWidget(self.cb2)
@@ -264,7 +264,6 @@ class PlotFileWidget(QtWidgets.QWidget):
         self.x = LineEditComplete("x")
         self.y = LineEditComplete("y")
         self.parameter = LineEditComplete("param")
-
 
         self.crs = InputCRS()
 
@@ -312,7 +311,6 @@ class PlotFileWidget(QtWidgets.QWidget):
 
         return layer
 
-
     def b_layer_checkbox(self):
         if self.blayer.isChecked():
             self.t1.setReadOnly(False)
@@ -356,7 +354,7 @@ class PlotFileWidget(QtWidgets.QWidget):
             if file_path.suffix.lower() not in self.file_endings:
                 self.file_info.setText(
                     f"the file {self.file_path.name} is not a valid file"
-                    )
+                )
                 self.file_path = None
                 return
 
@@ -369,27 +367,29 @@ class PlotFileWidget(QtWidgets.QWidget):
             self.file_info.setText(info)
 
         self.window = NewWindow(parent=self.parent)
-        self.window.setWindowFlags(Qt.FramelessWindowHint|Qt.Dialog|Qt.WindowStaysOnTopHint)
+        self.window.setWindowFlags(
+            Qt.FramelessWindowHint | Qt.Dialog | Qt.WindowStaysOnTopHint
+        )
 
         self.window.layout.addWidget(self)
         self.window.resize(800, 500)
         self.window.show()
-
 
     def b_plot_file(self):
         try:
             self.do_plot_file()
         except Exception:
             import traceback
+
             show_error_popup(
                 text="There was an error while trying to plot the data!",
                 title="Error",
-                details=traceback.format_exc())
+                details=traceback.format_exc(),
+            )
             return
 
         if self.close_on_plot:
             self.window.close()
-
 
         if self.attach_tab_after_plot:
             self.attach_as_tab()
@@ -397,8 +397,10 @@ class PlotFileWidget(QtWidgets.QWidget):
     def do_open_file(self):
         file_path = Path(QtWidgets.QFileDialog.getOpenFileName()[0])
 
-        return (file_path,
-                f"The file {file_path.stem} has\n {file_path.stat().st_size} bytes.")
+        return (
+            file_path,
+            f"The file {file_path.stem} has\n {file_path.stat().st_size} bytes.",
+        )
 
     def do_plot_file(self):
         self.file_info.setText("Implement `.do_plot_file()` to plot the data!")
@@ -440,7 +442,6 @@ class PlotFileWidget(QtWidgets.QWidget):
         self.b_plot.close()
 
 
-
 class PlotGeoTIFFWidget(PlotFileWidget):
 
     file_endings = (".tif", ".tiff")
@@ -450,6 +451,7 @@ class PlotGeoTIFFWidget(PlotFileWidget):
 
         with xar.open_dataset(file_path) as f:
             import io
+
             info = io.StringIO()
             f.info(info)
 
@@ -458,7 +460,6 @@ class PlotGeoTIFFWidget(PlotFileWidget):
 
             self.crs.setText(f.rio.crs.to_string())
             self.parameter.setText(next((i for i in variables if i not in coords)))
-
 
         self.x.setText("x")
         self.y.setText("y")
@@ -469,9 +470,7 @@ class PlotGeoTIFFWidget(PlotFileWidget):
         self.y.set_complete_vals(cols)
         self.parameter.set_complete_vals(cols)
 
-
         return info.getvalue()
-
 
     def do_plot_file(self):
         if self.file_path is None:
@@ -485,7 +484,7 @@ class PlotGeoTIFFWidget(PlotFileWidget):
             cmap=self.cmaps.currentText(),
             vmin=to_float_none(self.vmin.text()),
             vmax=to_float_none(self.vmax.text()),
-            )
+        )
 
         m2.cb.pick.attach.annotate(modifier=1)
 
@@ -508,17 +507,17 @@ class PlotGeoTIFFWidget(PlotFileWidget):
 
         except Exception:
             import traceback
+
             show_error_popup(
                 text="There was an error while trying to update the values.",
                 title="Unable to update values.",
-                details=traceback.format_exc())
-
-
+                details=traceback.format_exc(),
+            )
 
 
 class PlotNetCDFWidget(PlotFileWidget):
 
-    file_endings = (".nc")
+    file_endings = ".nc"
 
     def __init__(self, *args, **kwargs):
 
@@ -528,7 +527,6 @@ class PlotNetCDFWidget(PlotFileWidget):
         self.sel = QtWidgets.QLineEdit("")
 
         tsel = QtWidgets.QLabel("isel:")
-
 
         l.addWidget(tsel)
         l.addWidget(self.sel)
@@ -557,16 +555,19 @@ class PlotNetCDFWidget(PlotFileWidget):
             return ast.literal_eval("{'date':1}")
         except Exception:
             import traceback
-            show_error_popup(text=f"{sel} is not a valid selection",
-                             title="Invalid selection args",
-                             details=traceback.format_exc())
 
+            show_error_popup(
+                text=f"{sel} is not a valid selection",
+                title="Invalid selection args",
+                details=traceback.format_exc(),
+            )
 
     def do_open_file(self, file_path):
         import xarray as xar
 
         with xar.open_dataset(file_path) as f:
             import io
+
             info = io.StringIO()
             f.info(info)
 
@@ -597,7 +598,6 @@ class PlotNetCDFWidget(PlotFileWidget):
 
         return info.getvalue()
 
-
     def do_update_vals(self):
         import xarray as xar
 
@@ -616,12 +616,12 @@ class PlotNetCDFWidget(PlotFileWidget):
 
         except Exception:
             import traceback
+
             show_error_popup(
                 text="There was an error while trying to update the values.",
                 title="Unable to update values.",
-                details=traceback.format_exc())
-
-
+                details=traceback.format_exc(),
+            )
 
     def do_plot_file(self):
         if self.file_path is None:
@@ -639,7 +639,7 @@ class PlotNetCDFWidget(PlotFileWidget):
             cmap=self.cmaps.currentText(),
             vmin=to_float_none(self.vmin.text()),
             vmax=to_float_none(self.vmax.text()),
-            )
+        )
 
         m2.cb.pick.attach.annotate(modifier=1)
 
@@ -653,12 +653,11 @@ class PlotNetCDFWidget(PlotFileWidget):
 class PlotCSVWidget(PlotFileWidget):
 
     default_shape = "ellipses"
-    file_endings = (".csv")
+    file_endings = ".csv"
 
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
-
 
     def get_crs(self):
         return get_crs(self.crs.text())
@@ -673,7 +672,6 @@ class PlotCSVWidget(PlotFileWidget):
         self.x.set_complete_vals(cols)
         self.y.set_complete_vals(cols)
         self.parameter.set_complete_vals(cols)
-
 
         if len(cols) == 3:
 
@@ -704,7 +702,6 @@ class PlotCSVWidget(PlotFileWidget):
 
         return head.__repr__()
 
-
     def do_plot_file(self):
         if self.file_path is None:
             return
@@ -721,7 +718,7 @@ class PlotCSVWidget(PlotFileWidget):
             cmap=self.cmaps.currentText(),
             vmin=to_float_none(self.vmin.text()),
             vmax=to_float_none(self.vmax.text()),
-            )
+        )
 
         m2.show_layer(m2.layer)
 
@@ -730,10 +727,10 @@ class PlotCSVWidget(PlotFileWidget):
         # check if we want to add an annotation
         self.b_add_annotate_cb()
 
-
     def do_update_vals(self):
         try:
             import pandas as pd
+
             df = pd.read_csv(self.file_path)
 
             vmin = df[self.parameter.text()].min()
@@ -744,19 +741,20 @@ class PlotCSVWidget(PlotFileWidget):
 
         except Exception:
             import traceback
+
             show_error_popup(
                 text="There was an error while trying to update the values.",
                 title="Unable to update values.",
-                details=traceback.format_exc())
+                details=traceback.format_exc(),
+            )
 
 
 class OpenDataStartTab(QtWidgets.QWidget):
     def __init__(self, *args, parent=None, **kwargs):
         super().__init__(*args, **kwargs)
 
-
         self.t1 = QtWidgets.QLabel()
-        self.t1.setAlignment(Qt.AlignBottom|Qt.AlignCenter)
+        self.t1.setAlignment(Qt.AlignBottom | Qt.AlignCenter)
         self.set_std_text()
 
         self.b1 = self.FileButton("Open File", tab=parent, txt=self.t1)
@@ -765,7 +763,6 @@ class OpenDataStartTab(QtWidgets.QWidget):
         layout.addWidget(self.b1, 0, 0)
         layout.addWidget(self.t1, 3, 0)
 
-
         layout.setAlignment(Qt.AlignCenter)
         self.setLayout(layout)
 
@@ -773,10 +770,11 @@ class OpenDataStartTab(QtWidgets.QWidget):
 
     def set_std_text(self):
         self.t1.setText(
-            "\n"+
-            "Open or DRAG & DROP files!\n\n"+
-            "Currently supported filetypes are:\n"+
-            "    NetCDF | GeoTIFF | CSV")
+            "\n"
+            + "Open or DRAG & DROP files!\n\n"
+            + "Currently supported filetypes are:\n"
+            + "    NetCDF | GeoTIFF | CSV"
+        )
 
     def dragEnterEvent(self, e):
         if e.mimeData().hasUrls():
@@ -803,12 +801,11 @@ class OpenDataStartTab(QtWidgets.QWidget):
             self.clicked.connect(lambda: self.new_file_tab())
             self.txt = txt
 
-
         @property
         def m(self):
             return self.tab.m
 
-        def new_file_tab(self, file_path = None):
+        def new_file_tab(self, file_path=None):
 
             if self.txt:
                 self.txt.setText("")
@@ -821,11 +818,11 @@ class OpenDataStartTab(QtWidgets.QWidget):
             global plc
             ending = file_path.suffix.lower()
             if ending in [".nc"]:
-                plc = PlotNetCDFWidget(parent = self.tab.parent, tab=self.tab)
+                plc = PlotNetCDFWidget(parent=self.tab.parent, tab=self.tab)
             elif ending in [".csv"]:
-                plc = PlotCSVWidget(parent = self.tab.parent, tab=self.tab)
+                plc = PlotCSVWidget(parent=self.tab.parent, tab=self.tab)
             elif ending in [".tif", ".tiff"]:
-                plc = PlotGeoTIFFWidget(parent = self.tab.parent, tab=self.tab)
+                plc = PlotGeoTIFFWidget(parent=self.tab.parent, tab=self.tab)
             else:
                 print("unknown file extension")
 
@@ -835,11 +832,12 @@ class OpenDataStartTab(QtWidgets.QWidget):
                 if self.txt:
                     self.txt.setText("File could not be opened...")
                 import traceback
+
                 show_error_popup(
                     text="There was an error while trying to open the file.",
                     title="Unable to open file.",
-                    details=traceback.format_exc())
-
+                    details=traceback.format_exc(),
+                )
 
 
 class OpenFileTabs(QtWidgets.QTabWidget):

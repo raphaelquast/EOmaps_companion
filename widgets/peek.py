@@ -3,6 +3,7 @@ from PyQt5.QtCore import Qt, Signal
 
 from .layer import AutoUpdateLayerDropdown, AutoUpdateLayerMenuButton
 
+
 class PeekMethodButtons(QtWidgets.QWidget):
     methodChanged = Signal(str)
 
@@ -14,10 +15,12 @@ class PeekMethodButtons(QtWidgets.QWidget):
         self.how = (self.rectangle_size, self.rectangle_size)
         self.alpha = 1
 
-        self.symbols = dict(zip(
-            ("🡇", "🡅", "🡆", "🡄", "⛋", "🞑"),
-            ("top", "bottom", "left", "right", "rectangle", "square"),
-            ))
+        self.symbols = dict(
+            zip(
+                ("🡇", "🡅", "🡆", "🡄", "⛋", "🞑"),
+                ("top", "bottom", "left", "right", "rectangle", "square"),
+            )
+        )
 
         self.symbols_inverted = {v: k for k, v in self.symbols.items()}
 
@@ -50,9 +53,8 @@ class PeekMethodButtons(QtWidgets.QWidget):
 
         # -------------------------
 
-
         buttons = QtWidgets.QHBoxLayout()
-        buttons.setAlignment(Qt.AlignLeft|Qt.AlignTop)
+        buttons.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         buttons.addWidget(self.buttons["top"])
         buttons.addWidget(self.buttons["bottom"])
         buttons.addWidget(self.buttons["right"])
@@ -70,7 +72,6 @@ class PeekMethodButtons(QtWidgets.QWidget):
 
         self.methodChanged.emit("square")
         self.buttons["rectangle"].setText(self.symbols_inverted["square"])
-
 
     def button_clicked(self):
 
@@ -90,16 +91,15 @@ class PeekMethodButtons(QtWidgets.QWidget):
 
         self.methodChanged.emit(method)
 
-
     def sider_value_changed(self, i):
-        self.rectangle_size = i/100
+        self.rectangle_size = i / 100
         if self._method in ["rectangle", "square"]:
             self.methodChanged.emit(self._method)
         else:
             self.methodChanged.emit("rectangle")
 
     def alpha_changed(self, i):
-        self.alpha = i/100
+        self.alpha = i / 100
         self.methodChanged.emit(self._method)
 
     def method_changed(self, method):
@@ -107,22 +107,20 @@ class PeekMethodButtons(QtWidgets.QWidget):
 
         for key, val in self.buttons.items():
             if key == method:
-                val.setStyleSheet('QToolButton {color: red; }')
+                val.setStyleSheet("QToolButton {color: red; }")
             else:
                 val.setStyleSheet("")
 
         if method == "square":
-            self.buttons["rectangle"].setStyleSheet('QToolButton {color: red; }')
-
-
+            self.buttons["rectangle"].setStyleSheet("QToolButton {color: red; }")
 
         if method == "rectangle":
-            if self.rectangle_size < .99:
+            if self.rectangle_size < 0.99:
                 self.how = (self.rectangle_size, self.rectangle_size)
             else:
                 self.how = "full"
         elif method == "square":
-            if self.rectangle_size < .99:
+            if self.rectangle_size < 0.99:
                 self.how = self.rectangle_size
             else:
                 self.how = "full"
@@ -130,12 +128,10 @@ class PeekMethodButtons(QtWidgets.QWidget):
             self.how = method
 
 
-
-
-
 class PeekLayerWidget(QtWidgets.QWidget):
-
-    def __init__(self, *args, parent=None, layers=None, exclude=None, how=(.5, .5), **kwargs):
+    def __init__(
+        self, *args, parent=None, layers=None, exclude=None, how=(0.5, 0.5), **kwargs
+    ):
         """
         A dropdown-list that attaches a peek-callback to look at the selected layer
 
@@ -155,7 +151,6 @@ class PeekLayerWidget(QtWidgets.QWidget):
         """
         super().__init__(*args, **kwargs)
 
-
         self.parent = parent
         self._layers = layers
         self._exclude = exclude
@@ -163,8 +158,10 @@ class PeekLayerWidget(QtWidgets.QWidget):
         self.cid = None
         self.current_layer = None
 
-        self.layerselector = AutoUpdateLayerDropdown(m=self.m, layers=layers, exclude=exclude)
-        self.layerselector.update_layers() # do this before attaching the callback!
+        self.layerselector = AutoUpdateLayerDropdown(
+            m=self.m, layers=layers, exclude=exclude
+        )
+        self.layerselector.update_layers()  # do this before attaching the callback!
         self.layerselector.currentIndexChanged[str].connect(self.set_layer_callback)
         self.layerselector.setMinimumWidth(100)
 
@@ -188,7 +185,7 @@ class PeekLayerWidget(QtWidgets.QWidget):
 
         selectorlayout = QtWidgets.QVBoxLayout()
         selectorlayout.addWidget(label, 0, Qt.AlignTop)
-        selectorlayout.addWidget(self.layerselector, 0, Qt.AlignCenter|Qt.AlignLeft)
+        selectorlayout.addWidget(self.layerselector, 0, Qt.AlignCenter | Qt.AlignLeft)
         selectorlayout.addWidget(modifier_widget)
         selectorlayout.setAlignment(Qt.AlignTop)
 
@@ -216,12 +213,10 @@ class PeekLayerWidget(QtWidgets.QWidget):
         if modifier == "":
             modifier = None
 
-        self.cid = self.m.all.cb.click.attach.peek_layer(l,
-                                                         how=self.buttons.how,
-                                                         alpha=self.buttons.alpha,
-                                                         modifier=modifier)
+        self.cid = self.m.all.cb.click.attach.peek_layer(
+            l, how=self.buttons.how, alpha=self.buttons.alpha, modifier=modifier
+        )
         self.current_layer = l
-
 
     def method_changed(self, method):
         self.add_peek_cb()
@@ -236,10 +231,12 @@ class PeekLayerWidget(QtWidgets.QWidget):
         if modifier == "":
             modifier = None
 
-        self.cid = self.m.all.cb.click.attach.peek_layer(self.current_layer,
-                                                         how=self.buttons.how,
-                                                         alpha=self.buttons.alpha,
-                                                         modifier=modifier)
+        self.cid = self.m.all.cb.click.attach.peek_layer(
+            self.current_layer,
+            how=self.buttons.how,
+            alpha=self.buttons.alpha,
+            modifier=modifier,
+        )
 
     def remove_peek_cb(self):
         if self.cid is not None:
@@ -251,7 +248,6 @@ class PeekTabs(QtWidgets.QTabWidget):
     def __init__(self, *args, parent=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.parent = parent
-
 
         self.setTabsClosable(True)
         self.tabCloseRequested.connect(self.close_handler)
@@ -271,12 +267,11 @@ class PeekTabs(QtWidgets.QTabWidget):
         # a tab that is used to create new tabs
         self.addTab(QtWidgets.QWidget(), "+")
         # don't show the close button for this tab
-        self.tabBar().setTabButton(self.count()-1, self.tabBar().RightSide, None)
+        self.tabBar().setTabButton(self.count() - 1, self.tabBar().RightSide, None)
 
         self.tabBarClicked.connect(self.tabbar_clicked)
 
         self.setCurrentIndex(0)
-
 
     def tabbar_clicked(self, index):
         if self.tabText(index) == "+":
@@ -297,12 +292,15 @@ class PeekTabs(QtWidgets.QTabWidget):
 
     def settxt_factory(self, w):
         def settxt():
-            self.setTabText(self.indexOf(w),
-                            w.buttons.symbols_inverted.get(w.buttons._method, "") +
-                            ((
-                            " [" +
-                            w.modifier.text() +
-                            "]: "
-                            ) if w.modifier.text().strip() != "" else ": ") +
-                            (w.current_layer if w.current_layer is not None else ""))
+            self.setTabText(
+                self.indexOf(w),
+                w.buttons.symbols_inverted.get(w.buttons._method, "")
+                + (
+                    (" [" + w.modifier.text() + "]: ")
+                    if w.modifier.text().strip() != ""
+                    else ": "
+                )
+                + (w.current_layer if w.current_layer is not None else ""),
+            )
+
         return settxt
