@@ -309,8 +309,9 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
 
             return
 
+        # only clear and re-draw the whole tabbar if it is necessary
+        # (e.g. if the number of layers has changed)
         self.menu().clear()
-        print("redraw menu")
 
         currlayer = str(self.m.BM.bg_layer)
         if "|" in currlayer:
@@ -369,7 +370,7 @@ class LayerEditor(QtWidgets.QFrame):
         self.new_layer_name.returnPressed.connect(self.new_layer)
 
         try:
-            addwms = AddWMSMenuButton(m=self.m)
+            addwms = AddWMSMenuButton(m=self.m, new_layer=False)
         except:
             addwms = QtWidgets.QPushButton("WMS services unavailable")
 
@@ -756,7 +757,6 @@ class LayerArtistEditor(QtWidgets.QWidget):
             else:
                 l_lw, b_lw = None, None
         except Exception:
-            print(a, "has no linewidth")
             l_lw, b_lw = None, None
 
 
@@ -850,7 +850,7 @@ class LayerArtistEditor(QtWidgets.QWidget):
         widget = self.tabs.currentWidget()
 
         if widget is None:
-            print("widget is none??")
+            # ignore events without tabs (they happen on re-population of the tabs)
             return
 
         layout = QtWidgets.QGridLayout()
@@ -911,15 +911,18 @@ class LayerArtistEditor(QtWidgets.QWidget):
         try:
             # restore the previously opened tab
             found = False
-            for i in range(self.tabs.count()):
-                if self.tabs.tabText(i) == self._current_tab_name:
-                    self.tabs.setCurrentIndex(self._current_tab_idx)
-                    found = True
-                    break
+            ntabs = self.tabs.count()
+            if ntabs > 0 and self._current_tab_name != "":
+                for i in range(ntabs):
+                    if self.tabs.tabText(i) == self._current_tab_name:
+                        self.tabs.setCurrentIndex(self._current_tab_idx)
+                        found = True
+                        break
 
-            if found is False:
-                print(f"Unable to restore previously opened tab '{self._current_tab_name}'!")
-                self.tabs.setCurrentIndex(self.m.BM._bg_layer)
+                if found is False:
+                    print("Unable to restore previously opened tab " +
+                          f"'{self._current_tab_name}'!")
+                    self.tabs.setCurrentIndex(self.m.BM._bg_layer)
         except:
             print("unable to activate tab")
             pass

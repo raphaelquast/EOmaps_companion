@@ -1,12 +1,61 @@
 from PyQt5 import QtWidgets, QtGui
-from PyQt5.QtCore import Qt, QRectF, QSize, QLocale, QEvent, Signal
+from PyQt5.QtCore import Qt, QRectF, QSize, QLocale, Signal
 from pathlib import Path
 
 from .base import ResizableWindow
-from .layer import LayerEditor
 
+def _str_to_bool(val):
+    return val == "True"
 
-import matplotlib.pyplot as plt
+def to_float_none(s):
+    if len(s) > 0:
+        return float(s.replace(",", "."))
+    else:
+        return None
+
+def show_error_popup(text=None, info=None, title=None, details=None):
+   global msg
+   msg = QtWidgets.QMessageBox()
+   msg.setIcon(QtWidgets.QMessageBox.Critical)
+
+   if text:
+       msg.setText(text)
+   if info:
+       msg.setInformativeText(info)
+   if title:
+       msg.setWindowTitle(title)
+   if details:
+       msg.setDetailedText(details)
+
+   msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+   msg.setWindowFlags(Qt.Dialog|Qt.WindowStaysOnTopHint)
+
+   msg.show()
+
+def get_crs(crs):
+    from eomaps import Maps
+
+    try:
+        if crs.startswith("Maps.CRS."):
+
+            crsname = crs[9:]
+            crs = getattr(Maps.CRS, crsname)
+            if callable(crs):
+                crs = crs()
+        else:
+            try:
+                crs = int(crs)
+            except Exception:
+                pass
+
+        # try if we can identify the crs
+        Maps.get_crs(Maps, crs)
+    except Exception:
+        import traceback
+        show_error_popup(text=f"{crs} is not a valid crs specifier",
+                         title="Unable to identify crs",
+                         details=traceback.format_exc())
+    return crs
 
 
 class LineEditComplete(QtWidgets.QLineEdit):
@@ -53,26 +102,16 @@ class InputCRS(LineEditComplete):
             return t
 
 
-# cache the pixmaps for matplotlib colormaps
-cmap_pixmaps = list()
-for cmap in sorted(plt.cm._colormaps()):
-    pixmap = QtGui.QPixmap()
-    pixmap.loadFromData(plt.cm.get_cmap(cmap)._repr_png_(), "png")
-    label = QtGui.QIcon()
-    label.addPixmap(pixmap, QtGui.QIcon.Normal, QtGui.QIcon.On)
-    label.addPixmap(pixmap, QtGui.QIcon.Normal, QtGui.QIcon.Off)
-    label.addPixmap(pixmap, QtGui.QIcon.Disabled, QtGui.QIcon.On)
-    label.addPixmap(pixmap, QtGui.QIcon.Disabled, QtGui.QIcon.Off)
-    cmap_pixmaps.append((label, cmap))
-
 class CmapDropdown(QtWidgets.QComboBox):
     def __init__(self, *args, startcmap="viridis", **kwargs):
         super().__init__(*args, **kwargs)
 
+        from .app import get_cmap_pixmaps
+
         self.setIconSize(QSize(100, 15))
         self.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
-        for label, cmap in cmap_pixmaps:
+        for label, cmap in get_cmap_pixmaps():
             self.addItem(label, cmap)
 
         self.setStyleSheet("combobox-popup: 0;");
@@ -81,7 +120,9 @@ class CmapDropdown(QtWidgets.QComboBox):
         if idx != -1:
             self.setCurrentIndex(idx)
 
-
+    def wheelEvent(self, e):
+        # ignore mouse-wheel events to disable changing the colormap with the mousewheel
+        pass
 
 class GetColorWidget(QtWidgets.QFrame):
     def __init__(self, facecolor="#ff0000", edgecolor="#000000", linewidth=1, alpha=1):
@@ -159,7 +200,6 @@ class GetColorWidget(QtWidgets.QFrame):
 
         w, h = size.width(), size.height()
         s = min(min(0.9 * h, 0.9 * w), 100)
-        #painter.drawRect(w/2 - s/2, h/2 - s/2, s, s)
         rect = QRectF(w/2 - s/2, h/2 - s/2, s, s)
         painter.drawRoundedRect(rect, s/5, s/5)
 
@@ -177,7 +217,6 @@ class GetColorWidget(QtWidgets.QFrame):
             self.set_facecolor_dialog()
 
     def cb_colorselected(self):
-        print("aaa")
         # a general callback that will always be connected to .colorSelected
         pass
 
@@ -383,25 +422,39 @@ class AutoUpdateLayerDropdown(QtWidgets.QComboBox):
 
         self.last_layers = []
 
+        self._last_active = None
+
         # update layers on every change of the Maps-object background layer
         self.m.BM.on_layer(self.update_visible_layer, persistent=True)
         self.update_layers()
 
         self.setSizeAdjustPolicy(self.AdjustToContents)
 
+        self.activated.connect(self.set_last_active)
+
+    def set_last_active(self):
+        self._last_active = self.currentText()
+
     def update_visible_layer(self, m, l):
         # make sure to re-fetch layers first
         self.update_layers()
 
         if self._use_active:
+            # set current index to active layer if _use_active
             currindex = self.findText(l)
             self.setCurrentIndex(currindex)
+        elif self._last_active is not None:
+            # set current index to last active layer otherwise
+            idx = self.findText(self._last_active)
+            if idx != -1:
+                self.setCurrentIndex(idx)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
             self.update_layers()
         elif event.button() == Qt.LeftButton:
             self.update_layers()
+
 
         super().mousePressEvent(event)
 
@@ -428,8 +481,14 @@ class AutoUpdateLayerDropdown(QtWidgets.QComboBox):
             self.addItem(str(key))
 
         if self._use_active:
+            # set current index to active layer if _use_active
             currindex = self.findText(str(self.m.BM.bg_layer))
             self.setCurrentIndex(currindex)
+        elif self._last_active is not None:
+            # set current index to last active layer otherwise
+            idx = self.findText(self._last_active)
+            if idx != -1:
+                self.setCurrentIndex(idx)
 
 
 class PeekMethodButtons(QtWidgets.QWidget):
@@ -438,15 +497,17 @@ class PeekMethodButtons(QtWidgets.QWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self._method = "rectangle"
+        self._method = "?"
         self.rectangle_size = 1
         self.how = (self.rectangle_size, self.rectangle_size)
         self.alpha = 1
 
         self.symbols = dict(zip(
-            ("🡇", "🡅", "🡆", "🡄", "🞑"),
-            ("top", "bottom", "left", "right", "rectangle"),
+            ("🡇", "🡅", "🡆", "🡄", "⛋", "🞑"),
+            ("top", "bottom", "left", "right", "rectangle", "square"),
             ))
+
+        self.symbols_inverted = {v: k for k, v in self.symbols.items()}
 
         self.buttons = dict()
         for symbol, method in self.symbols.items():
@@ -456,7 +517,6 @@ class PeekMethodButtons(QtWidgets.QWidget):
             b.clicked.connect(self.button_clicked)
 
             self.buttons[method] = b
-
 
         self.slider = QtWidgets.QSlider(Qt.Horizontal)
         self.slider.valueChanged.connect(self.sider_value_changed)
@@ -496,17 +556,35 @@ class PeekMethodButtons(QtWidgets.QWidget):
 
         self.methodChanged.connect(self.method_changed)
 
-        self.methodChanged.emit(self._method)
-
+        self.methodChanged.emit("square")
+        self.buttons["rectangle"].setText(self.symbols_inverted["square"])
 
 
     def button_clicked(self):
-        self.methodChanged.emit(self.symbols[self.sender().text()])
+
+        sender = self.sender().text()
+        if self._method in ["rectangle", "square"]:
+            if sender == self.symbols_inverted["square"]:
+                method = "rectangle"
+                self.buttons["rectangle"].setText(self.symbols_inverted["rectangle"])
+            elif sender == self.symbols_inverted["rectangle"]:
+                method = "square"
+                self.buttons["rectangle"].setText(self.symbols_inverted["square"])
+            else:
+                method = self.symbols[sender]
+
+        else:
+            method = self.symbols[sender]
+
+        self.methodChanged.emit(method)
 
 
     def sider_value_changed(self, i):
         self.rectangle_size = i/100
-        self.methodChanged.emit("rectangle")
+        if self._method in ["rectangle", "square"]:
+            self.methodChanged.emit(self._method)
+        else:
+            self.methodChanged.emit("rectangle")
 
     def alpha_changed(self, i):
         self.alpha = i/100
@@ -521,9 +599,19 @@ class PeekMethodButtons(QtWidgets.QWidget):
             else:
                 val.setStyleSheet("")
 
+        if method == "square":
+            self.buttons["rectangle"].setStyleSheet('QToolButton {color: red; }')
+
+
+
         if method == "rectangle":
             if self.rectangle_size < .99:
                 self.how = (self.rectangle_size, self.rectangle_size)
+            else:
+                self.how = "full"
+        elif method == "square":
+            if self.rectangle_size < .99:
+                self.how = self.rectangle_size
             else:
                 self.how = "full"
         else:
@@ -571,6 +659,16 @@ class PeekLayerWidget(QtWidgets.QWidget):
         self.buttons = PeekMethodButtons()
         self.buttons.methodChanged.connect(self.method_changed)
 
+        modifier_label = QtWidgets.QLabel("Modifier:")
+        self.modifier = QtWidgets.QLineEdit()
+        self.modifier.setMaximumWidth(50)
+        self.modifier.textChanged.connect(self.method_changed)
+
+        modifier_layout = QtWidgets.QHBoxLayout()
+        modifier_layout.addWidget(modifier_label, 0, Qt.AlignLeft)
+        modifier_layout.addWidget(self.modifier, 0, Qt.AlignLeft)
+        modifier_widget = QtWidgets.QWidget()
+        modifier_widget.setLayout(modifier_layout)
 
         label = QtWidgets.QLabel("<b>Peek Layer</b>:")
         width = label.fontMetrics().boundingRect(label.text()).width()
@@ -579,8 +677,8 @@ class PeekLayerWidget(QtWidgets.QWidget):
         selectorlayout = QtWidgets.QVBoxLayout()
         selectorlayout.addWidget(label, 0, Qt.AlignTop)
         selectorlayout.addWidget(self.layerselector, 0, Qt.AlignCenter|Qt.AlignLeft)
+        selectorlayout.addWidget(modifier_widget)
         selectorlayout.setAlignment(Qt.AlignTop)
-
 
         layout = QtWidgets.QHBoxLayout()
         layout.addLayout(selectorlayout)
@@ -595,17 +693,21 @@ class PeekLayerWidget(QtWidgets.QWidget):
         return self.parent.m
 
     def set_layer_callback(self, l):
+        self.remove_peek_cb()
         if self.cid is not None:
-            self.m.all.cb.click.remove(self.cid)
-            self.cid = None
             self.current_layer = None
 
         if l == "":
             return
 
+        modifier = self.modifier.text().strip()
+        if modifier == "":
+            modifier = None
+
         self.cid = self.m.all.cb.click.attach.peek_layer(l,
                                                          how=self.buttons.how,
-                                                         alpha=self.buttons.alpha)
+                                                         alpha=self.buttons.alpha,
+                                                         modifier=modifier)
         self.current_layer = l
 
 
@@ -616,14 +718,22 @@ class PeekLayerWidget(QtWidgets.QWidget):
         if self.current_layer is None:
             return
 
-        if self.cid is not None:
-            self.m.all.cb.click.remove(self.cid)
-            self.cid = None
+        self.remove_peek_cb()
+
+        modifier = self.modifier.text()
+        if modifier == "":
+            modifier = None
 
         self.cid = self.m.all.cb.click.attach.peek_layer(self.current_layer,
                                                          how=self.buttons.how,
-                                                         alpha=self.buttons.alpha)
+                                                         alpha=self.buttons.alpha,
+                                                         modifier=modifier)
 
+
+    def remove_peek_cb(self):
+        if self.cid is not None:
+            self.m.all.cb.click.remove(self.cid)
+            self.cid = None
 
 class NewWindowWidget(QtWidgets.QWidget):
     def __init__(self, *args, **kwargs):
@@ -731,26 +841,13 @@ class ShowPeekLayerWidget(QtWidgets.QWidget):
         super().__init__(*args, **kwargs)
         self.parent = parent
 
-        layout = QtWidgets.QHBoxLayout()
-
-        #show = ShowLayerWidget(m=self.m)
-
-        #show = LayerEditor(m = self.m)
-
-        #new = NewWindowWidget()
-        #show.layout().addStretch(10)
-        #show.layout().addWidget(new)
-
         peek = PeekLayerWidget(parent=self.parent)
-
 
         leftlayout = QtWidgets.QVBoxLayout()
         leftlayout.setAlignment(Qt.AlignTop)
-        #leftlayout.addWidget(new)
 
         rightlayout = QtWidgets.QVBoxLayout()
         rightlayout.addWidget(peek)
-
 
         left = QtWidgets.QWidget()
         left.setLayout(leftlayout)
@@ -762,8 +859,7 @@ class ShowPeekLayerWidget(QtWidgets.QWidget):
         split.addWidget(left)
         split.addWidget(right)
 
-
-        #split.setSizes((500, 200))
+        layout = QtWidgets.QHBoxLayout()
         layout.addWidget(split)
 
         self.setLayout(layout)
@@ -772,8 +868,6 @@ class ShowPeekLayerWidget(QtWidgets.QWidget):
     def m(self):
         return self.parent.m
 
-def _str_to_bool(val):
-    return val == "True"
 
 class ShapeSelector(QtWidgets.QWidget):
 
@@ -882,10 +976,7 @@ class ShapeSelector(QtWidgets.QWidget):
 
             self.options.addLayout(param)
 
-
         self.layout.addLayout(self.options)
-        # self.widget_name.deleteLater()
-        # self.widget_name = None
 
     def clear_item(self, item):
         if hasattr(item, "layout"):
@@ -1070,7 +1161,7 @@ class PlotFileWidget(QtWidgets.QWidget):
     def m(self):
         return self.parent.m
 
-    def get_layer(self):#
+    def get_layer(self):
         layer = self.m.BM.bg_layer
 
         if self.blayer.isChecked():
@@ -1119,9 +1210,6 @@ class PlotFileWidget(QtWidgets.QWidget):
                 self.cid_annotate = None
 
     def open_file(self, file_path=None):
-        # if file_path is None:
-        #     file_path = Path(QtWidgets.QFileDialog.getOpenFileName()[0])
-
         info = self.do_open_file(file_path)
 
         if self.file_endings is not None:
@@ -1140,7 +1228,6 @@ class PlotFileWidget(QtWidgets.QWidget):
         if info is not None:
             self.file_info.setText(info)
 
-        # # TODO
         self.window = NewWindow(parent=self.parent)
         self.window.setWindowFlags(Qt.FramelessWindowHint|Qt.Dialog|Qt.WindowStaysOnTopHint)
 
@@ -1212,32 +1299,6 @@ class PlotFileWidget(QtWidgets.QWidget):
         self.setlayername.setEnabled(False)
         self.b_plot.close()
 
-def show_error_popup(text=None, info=None, title=None, details=None):
-   global msg
-   msg = QtWidgets.QMessageBox()
-   msg.setIcon(QtWidgets.QMessageBox.Critical)
-
-   if text:
-       msg.setText(text)
-   if info:
-       msg.setInformativeText(info)
-   if title:
-       msg.setWindowTitle(title)
-   if details:
-       msg.setDetailedText(details)
-
-   msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
-   msg.setWindowFlags(Qt.Dialog|Qt.WindowStaysOnTopHint)
-
-   msg.show()
-   #msg.exec_()
-
-
-def to_float_none(s):
-    if len(s) > 0:
-        return float(s.replace(",", "."))
-    else:
-        return None
 
 
 class PlotGeoTIFFWidget(PlotFileWidget):
@@ -1313,31 +1374,6 @@ class PlotGeoTIFFWidget(PlotFileWidget):
                 details=traceback.format_exc())
 
 
-
-def get_crs(crs):
-    from eomaps import Maps
-
-    try:
-        if crs.startswith("Maps.CRS."):
-
-            crsname = crs[9:]
-            crs = getattr(Maps.CRS, crsname)
-            if callable(crs):
-                crs = crs()
-        else:
-            try:
-                crs = int(crs)
-            except Exception:
-                pass
-
-        # try if we can identify the crs
-        Maps.get_crs(Maps, crs)
-    except Exception:
-        import traceback
-        show_error_popup(text=f"{crs} is not a valid crs specifier",
-                         title="Unable to identify crs",
-                         details=traceback.format_exc())
-    return crs
 
 
 class PlotNetCDFWidget(PlotFileWidget):
@@ -1614,8 +1650,6 @@ class NewWindow(ResizableWindow):
 
     def close_button_callback(self):
         self.close()
-        # TODO detect if all windows are closed, and if so call sys.exit!
-        #sys.exit(0)
 
     def maximize_button_callback(self):
         if not self.isMaximized():
@@ -1634,7 +1668,7 @@ class OpenDataStartTab(QtWidgets.QWidget):
 
 
         self.t1 = QtWidgets.QLabel()
-        self.t1.setAlignment(Qt.AlignBottom)
+        self.t1.setAlignment(Qt.AlignBottom|Qt.AlignCenter)
         self.set_std_text()
 
         self.b1 = self.FileButton("Open File", tab=parent, txt=self.t1)
@@ -1710,8 +1744,6 @@ class OpenDataStartTab(QtWidgets.QWidget):
             else:
                 print("unknown file extension")
 
-            #self.plc = self.PlotClass(parent = self.tab.parent, tab=self.tab)
-
             try:
                 plc.open_file(file_path)
             except Exception:
@@ -1723,21 +1755,6 @@ class OpenDataStartTab(QtWidgets.QWidget):
                     title="Unable to open file.",
                     details=traceback.format_exc())
 
-            return
-
-            # if t.file_path is not None:
-            #     name = t.file_path.stem
-            # else:
-            #     return
-
-            # if len(name) > 10:
-            #     name = name[:7] + "..."
-            # self.tab.addTab(t, name)
-
-            # tabindex = self.tab.indexOf(t)
-
-            # self.tab.setCurrentIndex(tabindex)
-            # self.tab.setTabToolTip(tabindex, str(t.file_path))
 
 
 class OpenFileTabs(QtWidgets.QTabWidget):
@@ -1760,36 +1777,48 @@ class SaveFileWidget(QtWidgets.QWidget):
         self.parent = parent
 
         b_edit = EditLayoutButton('Edit layout', m=self.m)
+        width = b_edit.fontMetrics().boundingRect(b_edit.text()).width()
+        b_edit.setFixedWidth(width + 30)
+
+
 
         b1 = QtWidgets.QPushButton('Save!')
+        width = b1.fontMetrics().boundingRect(b1.text()).width()
+        b1.setFixedWidth(width + 30)
+
         b1.clicked.connect(self.save_file)
 
-        # resolution
-        res = QtWidgets.QHBoxLayout()
+        # dpi
         l1 = QtWidgets.QLabel("DPI:")
+        width = l1.fontMetrics().boundingRect(l1.text()).width()
+        l1.setFixedWidth(width + 5)
+
+
         self.dpi_input = QtWidgets.QLineEdit()
+        self.dpi_input.setMaximumWidth(50)
         validator = QtGui.QIntValidator()
         self.dpi_input.setValidator(validator)
         self.dpi_input.setText("200")
 
-        res.addWidget(l1)
-        res.addWidget(self.dpi_input)
-        res.setAlignment(Qt.AlignTop)
+        # transparent
+        self.transp_cb = QtWidgets.QCheckBox()
+        transp_label = QtWidgets.QLabel("Tranparent")
+        width = transp_label.fontMetrics().boundingRect(transp_label.text()).width()
+        transp_label.setFixedWidth(width + 5)
 
-
-        save_layout = QtWidgets.QGridLayout()
-        save_layout.addLayout(res, 0, 0, 1, 2)
-        save_layout.addWidget(b_edit, 1, 0)
-        save_layout.addWidget(b1, 1, 1)
-
-        new = NewWindowWidget()
 
         layout = QtWidgets.QHBoxLayout()
-        layout.addLayout(save_layout)
-        layout.addWidget(new)
+        layout.addWidget(b_edit)
+        layout.addStretch(1)
+        layout.addWidget(l1)
+        layout.addWidget(self.dpi_input)
+        layout.addWidget(transp_label)
+        layout.addWidget(self.transp_cb)
 
+        layout.addWidget(b1)
 
-        layout.setAlignment(Qt.AlignCenter)
+        layout.setAlignment(Qt.AlignBottom)
+
         self.setLayout(layout)
 
     @property
@@ -1800,11 +1829,68 @@ class SaveFileWidget(QtWidgets.QWidget):
         savepath = QtWidgets.QFileDialog.getSaveFileName()[0]
 
         if savepath is not None:
-            # self.m.figure.f.set_dpi(int(self.dpi_input.text()))
-            # self.m.redraw()
-            self.m.savefig(savepath, dpi=int(self.dpi_input.text()))
-            # self.m.figure.f.set_dpi(100)
-            # self.m.redraw()
+            self.m.savefig(savepath, dpi=int(self.dpi_input.text()),
+                           transparent = self.transp_cb.isChecked())
+
+class PeekTabs(QtWidgets.QTabWidget):
+    def __init__(self, *args, parent=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.parent = parent
+
+
+        self.setTabsClosable(True)
+        self.tabCloseRequested.connect(self.close_handler)
+
+        w = PeekLayerWidget(parent=self.parent)
+        self.addTab(w, "    ")
+
+        # update the tab title with the modifier key
+        cb = self.settxt_factory(w)
+        w.modifier.textChanged.connect(cb)
+        w.buttons.methodChanged.connect(cb)
+        w.layerselector.currentIndexChanged[str].connect(cb)
+
+        # emit signal to set text
+        w.buttons.methodChanged.emit(w.buttons._method)
+
+        # a tab that is used to create new tabs
+        self.addTab(QtWidgets.QWidget(), "+")
+        # don't show the close button for this tab
+        self.tabBar().setTabButton(self.count()-1, self.tabBar().RightSide, None)
+
+        self.tabBarClicked.connect(self.tabbar_clicked)
+
+        self.setCurrentIndex(0)
+
+
+    def tabbar_clicked(self, index):
+        if self.tabText(index) == "+":
+            w = PeekLayerWidget(parent=self.parent)
+            self.insertTab(self.count() - 1, w, "    ")
+
+            # update the tab title with the modifier key
+            cb = self.settxt_factory(w)
+            w.modifier.textChanged.connect(cb)
+            w.buttons.methodChanged.connect(cb)
+            w.layerselector.currentIndexChanged[str].connect(cb)
+            # emit signal to set text
+            w.buttons.methodChanged.emit(w.buttons._method)
+
+    def close_handler(self, index):
+        self.widget(index).remove_peek_cb()
+        self.removeTab(index)
+
+    def settxt_factory(self, w):
+        def settxt():
+            self.setTabText(self.indexOf(w),
+                            w.buttons.symbols_inverted.get(w.buttons._method, "") +
+                            ((
+                            " [" +
+                            w.modifier.text() +
+                            "]: "
+                            ) if w.modifier.text().strip() != "" else ": ") +
+                            (w.current_layer if w.current_layer is not None else ""))
+        return settxt
 
 
 class ControlTabs(QtWidgets.QTabWidget):
@@ -1812,12 +1898,29 @@ class ControlTabs(QtWidgets.QTabWidget):
         super().__init__(*args, **kwargs)
         self.parent = parent
 
-        self.tab1 = PeekLayerWidget(parent=self.parent)
+        tab1 = QtWidgets.QWidget()
+        tab1layout = QtWidgets.QVBoxLayout()
+
+        peektabs = PeekTabs(parent= self.parent)
+        tab1layout.addWidget(peektabs)
+
+        from .wms_utils import AddWMSMenuButton
+        try:
+            addwms = AddWMSMenuButton(m=self.m, new_layer=True)
+        except:
+            addwms = QtWidgets.QPushButton("WMS services unavailable")
+        tab1layout.addWidget(addwms)
+
+        tab1layout.addStretch(1)
+        tab1layout.addWidget(SaveFileWidget(parent=self.parent))
+
+        tab1.setLayout(tab1layout)
+
+
+        self.tab1 = tab1
         self.tab2 = OpenFileTabs(parent=self.parent)
         self.tab3 = DrawerWidget(parent=self.parent)
-        self.tab4 = SaveFileWidget(parent=self.parent)
 
-        #self.tab5 = LayerEditor(m = self.m)
 
         from .layer import LayerArtistEditor
         self.tab6 = LayerArtistEditor(m=self.m)
@@ -1825,11 +1928,9 @@ class ControlTabs(QtWidgets.QTabWidget):
         self.addTab(self.tab1, "Compare")
         self.addTab(self.tab6, "Edit")
         self.addTab(self.tab2, "Open Files")
-        self.addTab(self.tab3, "Draw Shapes")
-        self.addTab(self.tab4, "Save")
+        if hasattr(self.m.util, "draw"):   # for future "draw" capabilities
+            self.addTab(self.tab3, "Draw Shapes")
 
-
-        # TODO this should be executed on every m.BM.add_bg_artist action!
         # re-populate artists on tab-change
         self.currentChanged.connect(self.tabchanged)
 

@@ -9,14 +9,29 @@ iconpath = Path(__file__).parent / "icons"
 from eomaps import Maps
 
 from PyQt5 import QtWidgets, QtGui, QtCore
-from PyQt5.QtWidgets import QPushButton
 from PyQt5.QtCore import Qt
 
-# import matplotlib.pyplot as plt
-# plt.ioff()
+from functools import lru_cache
 
-# import matplotlib
-# matplotlib.use("agg")
+
+import matplotlib.pyplot as plt
+@lru_cache()
+def get_cmap_pixmaps():
+    # cache the pixmaps for matplotlib colormaps
+    # Note: the cache must be cleared if new colormaps are registered!
+    # (emit the cmapsChanged signal of MenuWindow to clear the cache)
+    cmap_pixmaps = list()
+    for cmap in sorted(plt.cm._colormaps()):
+        pixmap = QtGui.QPixmap()
+        pixmap.loadFromData(plt.cm.get_cmap(cmap)._repr_png_(), "png")
+        label = QtGui.QIcon()
+        label.addPixmap(pixmap, QtGui.QIcon.Normal, QtGui.QIcon.On)
+        label.addPixmap(pixmap, QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        label.addPixmap(pixmap, QtGui.QIcon.Disabled, QtGui.QIcon.On)
+        label.addPixmap(pixmap, QtGui.QIcon.Disabled, QtGui.QIcon.Off)
+        cmap_pixmaps.append((label, cmap))
+
+    return cmap_pixmaps
 
 
 class MyMap(EOmapsCanvas):
@@ -58,8 +73,6 @@ class EOmaps_titlebar(QtWidgets.QToolBar):
 
         self.m = m
 
-        layout = QtWidgets.QHBoxLayout()
-
         logo = QtGui.QPixmap(str(iconpath / "logo.png"))
         logolabel = QtWidgets.QLabel()
         logolabel.setMaximumHeight(25)
@@ -67,11 +80,14 @@ class EOmaps_titlebar(QtWidgets.QToolBar):
         logolabel.setPixmap(logo.scaled(logolabel.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
 
-
-        from .utils import ShowLayerWidget
         from .layer import AutoUpdateLayerMenuButton
-        #showlayer = ShowLayerWidget(m = self.m)
         showlayer = AutoUpdateLayerMenuButton(m=self.m)
+
+        b_close = QtWidgets.QToolButton()
+        b_close.setAutoRaise(True)
+        b_close.setFixedSize(25, 25)
+        b_close.setText("🞫")
+        b_close.clicked.connect(self.close_button_callback)
 
 
         self.transparentQ = QtWidgets.QToolButton()
@@ -86,18 +102,28 @@ class EOmaps_titlebar(QtWidgets.QToolBar):
         self.addWidget(space)
         self.addWidget(showlayer)
         self.addWidget(logolabel)
+        self.addWidget(b_close)
 
         self.setMovable(False)
-        self.setStyleSheet("border: none; spacing:20px;")
-        self.setContentsMargins(5, 0, 5,5)
+
+        self.setStyleSheet("QToolBar{border: none; spacing:20px;}"
+                           'QToolButton[autoRaise="true"]{text-align:center; color: red;}'
+                           "QPushButton{border:none;}"
+                           )
+        self.setContentsMargins(5, 0, 0, 5)
+
+    def close_button_callback(self):
+        self.window().close()
 
 
 class transparentWindow(ResizableWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.setFocusPolicy(QtCore.Qt.StrongFocus)
-
         self.out_alpha = 0.25
+
+        # make sure the window does not steal focus from the matplotlib-canvas
+        # on show (otherwise callbacks are inactive as long as the window is focused!)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setWindowFlags(Qt.FramelessWindowHint|Qt.Dialog|Qt.WindowStaysOnTopHint)
 
     def focusInEvent(self, e):
@@ -112,15 +138,25 @@ class transparentWindow(ResizableWindow):
 
 
 from PyQt5.QtWidgets import QDesktopWidget
+from PyQt5.QtCore import Signal
 
 class MenuWindow(transparentWindow):
+
+    cmapsChanged = Signal()
+
     def __init__(self, *args, m=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.m = m
 
-        tabs = utils.ControlTabs(parent=self)
+        # clear the colormaps-dropdown pixmap cache if the colormaps have changed
+        # (the signal is emmited by Maps-objects if a new colormap is registered)
+        self.cmapsChanged.connect(lambda: get_cmap_pixmaps.cache_clear())
 
-        menu_layout = QtWidgets.QVBoxLayout()
+        self.titlebar = EOmaps_titlebar(m=self.m)
+        self.titlebar.transparentQ.clicked.connect(self.cb_transparentQ)
+        self.addToolBar(self.titlebar)
+
+        tabs = utils.ControlTabs(parent=self)
         tabs.setMouseTracking(True)
 
         self.setStyleSheet("""QToolTip {
@@ -130,24 +166,18 @@ class MenuWindow(transparentWindow):
                                 color: white;
                                 border: none;
                                 }""")
-
-
-        self.titlebar = EOmaps_titlebar(m=self.m)
-        self.titlebar.transparentQ.clicked.connect(self.cb_transparentQ)
         self.cb_transparentQ()
 
-
-        menu_layout.addWidget(tabs)
-
         sizegrip = QtWidgets.QSizeGrip(self)
+
+
+        menu_layout = QtWidgets.QVBoxLayout()
+        menu_layout.addWidget(tabs)
         menu_layout.addWidget(sizegrip, 0, QtCore.Qt.AlignBottom | QtCore.Qt.AlignRight)
 
         menu_widget = QtWidgets.QWidget()
         menu_widget.setLayout(menu_layout)
 
-
-
-        self.addToolBar(self.titlebar)
         # prevent context-menu's from appearing to avoid the "hide toolbar"
         # context menu when right-clicking the toolbar
         self.setContextMenuPolicy(Qt.NoContextMenu)
@@ -190,20 +220,10 @@ class MainWindow(EOmapsWindow):
         super().__init__(eomaps_canvas = canvas, *args, **kwargs)
         self.setWindowTitle("EOmaps QT embedding example")
 
-        tabs = utils.ControlTabs(parent=self)
-
-
-
         b_showhide = QtWidgets.QToolButton()
         b_showhide.setIcon(QtGui.QIcon(str(iconpath / "logo.png")))
         b_showhide.clicked.connect(self.cb_showhide)
         b_showhide.setAutoRaise(True)
-
-
-        self.menu_window = transparentWindow(flags=Qt.Window)
-        menu_layout = QtWidgets.QVBoxLayout()
-        tabs.setMouseTracking(True)
-
 
         self.toolbar.addSeparator()
         self.toolbar.addWidget(b_showhide)
@@ -219,49 +239,15 @@ class MainWindow(EOmapsWindow):
         self.toolbar.setMovable(False)
         self.setStyleSheet("border: none; spacing:5px;")
 
-
-
-
-        self.setStyleSheet("""QToolTip {
-                                font-family: "SansSerif";
-                                font-size:10;
-                                background-color: rgb(53, 53, 53);
-                                color: white;
-                                border: none;
-                                }""")
-
-
         self.addToolBar(self.toolbar)
 
-
-
-        self.titlebar = EOmaps_titlebar(m=self.m)
-        self.titlebar.transparentQ.clicked.connect(self.cb_transparentQ)
-        self.cb_transparentQ()
-
-
-        self.menu_window.addToolBar(self.titlebar)
-        # prevent context-menu's from appearing to avoid the "hide toolbar"
-        # context menu when right-clicking the toolbar
-        self.menu_window.setContextMenuPolicy(Qt.NoContextMenu)
-
-        menu_layout.addWidget(tabs)
-
-        sizegrip = QtWidgets.QSizeGrip(self.menu_window)
-        menu_layout.addWidget(sizegrip, 0, QtCore.Qt.AlignBottom | QtCore.Qt.AlignRight)
-
-        menu_widget = QtWidgets.QWidget()
-        menu_widget.setLayout(menu_layout)
-
-        self.menu_window.setCentralWidget(menu_widget)
-
+        self.menu_window = MenuWindow(m=self.m)
 
         self.show()
         self.activateWindow()
 
         self.center()
 
-        self.setAnimated(False)
 
 
     def cb_showhide(self):
@@ -269,18 +255,6 @@ class MainWindow(EOmapsWindow):
             self.menu_window.hide()
         else:
             self.menu_window.show()
-
-    def cb_transparentQ(self):
-        if self.menu_window.out_alpha == 1:
-            self.menu_window.out_alpha = 0.25
-            self.menu_window.setFocus()
-            self.titlebar.transparentQ.setIcon(QtGui.QIcon(str(iconpath / "eye_closed.png")))
-
-        else:
-            self.menu_window.out_alpha = 1
-            self.menu_window.setFocus()
-            self.titlebar.transparentQ.setIcon(QtGui.QIcon(str(iconpath / "eye_open.png")))
-
 
     def center(self):
         qr = self.frameGeometry()
@@ -327,7 +301,6 @@ def run(m=None):
 
     w = MainWindow(m=m)
     w.show()
-    #sys.exit(app.exec_())
 
 
 if __name__ == "__main__":

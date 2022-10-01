@@ -1,18 +1,11 @@
-import sys
-import matplotlib
-matplotlib.use('Qt5Agg')
-
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
 
 from eomaps import Maps
 
-from PyQt5 import QtWidgets, QtGui, QtCore
-from PyQt5.QtWidgets import QPushButton
+from PyQt5 import QtWidgets, QtCore
+from PyQt5.QtCore import Qt
 
-from PyQt5.QtCore import Qt, QRectF
-
-from pathlib import Path
 # %%
 class ResizableWindow(QtWidgets.QMainWindow):
 
@@ -233,15 +226,7 @@ class EOmapsCanvas(FigureCanvasQTAgg):
 
     def __init__(self, parent=None, width=5, height=4, dpi=100, crs=4326):
 
-        # turn interactive mode off since we don't want the figure to appear
-        # in a separate window as well
-        #plt.ioff()
-
         self.m = self.setup_map(width, height, dpi, crs)
-        # self.m.figure.f.patch.set_facecolor((53/255, 53/255, 53/255))
-        # self.m.figure.f.set_edgecolor(".5")
-        # self.m.figure.f.set_linewidth(2)
-        # self.m.ax.patch.set_color("none")
 
         super().__init__(self.m.figure.f)
 
@@ -356,35 +341,12 @@ class EOmapsWindow(ResizableWindow):
         self.layout.setContentsMargins(5, 5, 5, 5)
 
 
-        #self.split_top = MySplitter(Qt.Vertical, m=self.canvas.m)
-
-        #self.split_top.addWidget(self.toolbar)
-        #self.split_top.addWidget(self.canvas)
-        #self.layout.addWidget(self.split_top)
-
         self.layout.addWidget(self.canvas)
 
         # Create a placeholder widget to hold our toolbar and canvas.
         widget = QtWidgets.QWidget()
         widget.setLayout(self.layout)
         self.setCentralWidget(widget)
-
-        # toolbar = QtWidgets.QToolBar()
-        # a exit-button (add it as the last object to make sure it's on top)
-        # self.closebutton = FloatingButtonWidget(self)
-        # self.closebutton.setFixedSize(30, 30)
-        # self.closebutton.setText("\u274C")
-        # self.closebutton.setStyleSheet("text-align:top;border:none;")
-        # self.closebutton.clicked.connect(self.close_button_callback)
-        # self.closebutton.move(0,0)
-
-        # self.enlargebutton = FloatingButtonWidget(self)
-        # self.enlargebutton.setFixedSize(30, 30)
-        # self.enlargebutton.setText("\u25a0")
-        # self.enlargebutton.setStyleSheet("text-align:top;border:none;")
-        # self.enlargebutton.clicked.connect(self.maximize_button_callback)
-        # self.enlargebutton.paddingLeft = 30
-
 
 
         self.b_close = QtWidgets.QPushButton()
@@ -404,39 +366,19 @@ class EOmapsWindow(ResizableWindow):
         self.b_enlarge.setStyleSheet("text-align:top;border:none;")
 
 
-        # toolbar.addWidget(self.enlargebutton)
-        # toolbar.addWidget(self.closebutton)
-
-        # toolbar.setFloatable(False)
-        # toolbar.setMovable(False)
-
-        # self.addToolBar(toolbar)
-
-    def resizeEvent(self, event): #2
-        super().resizeEvent(event)
-        # self.enlargebutton.update_position()
-        # self.closebutton.update_position()
-
-
     @property
     def m(self):
         # the EOmaps maps-object
         return self.canvas.m
 
     def close_button_callback(self):
-        # TODO save cleanup
+        # TODO perform a clear cleanup
         plt.close(self.m.figure.f)
         self.m.cleanup()
         self.canvas.m = None
 
-
-
         self.menu_window.close()
         self.close()
-        # from PyQt5.QtWidgets import QApplication
-        # QApplication.closeAllWindows()
-        # TODO detect if all windows are closed, and if so call sys.exit!
-        #sys.exit(0)
 
     def maximize_button_callback(self):
         if not self.isMaximized():

@@ -1,4 +1,4 @@
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtWidgets
 
 
 class WMS_OSM():
@@ -52,21 +52,24 @@ class WMS_S1GBM():
 
 
 class AddWMSMenuButton(QtWidgets.QPushButton):
-    def __init__(self, *args, m=None, **kwargs):
+    def __init__(self, *args, m=None, new_layer=False, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.m = m
-
+        self._new_layer = new_layer
 
         wms_dict = {"OpenStreetMap": WMS_OSM,
                     "S2 Cloudless": WMS_S2_cloudless,
                     "ESA WorldCover": WMS_ESA_WorldCover,
                     "S1GBM:": WMS_S1GBM}
 
+        if self._new_layer:
+            self.setText("Create new WebMap Layer")
+        else:
+            self.setText("Add WebMap Service")
 
-        self.setText("Add WebMap Service")
         width = self.fontMetrics().boundingRect(self.text()).width()
-        self.setFixedWidth(width * 1.6)
+        self.setFixedWidth(width + 30)
 
         feature_menu = QtWidgets.QMenu()
         feature_menu.setStyleSheet("QMenu { menu-scrollable: 1;}")
@@ -92,9 +95,14 @@ class AddWMSMenuButton(QtWidgets.QPushButton):
             return
 
         def wms_cb():
-            layer = wms.name + "_" + wmslayer
+            if self._new_layer:
+                layer = wms.name + "_" + wmslayer
+            else:
+                layer = self.m.BM._bg_layer
+
             wms.do_add_layer(wmslayer, layer=layer)
-            self.m.show_layer(layer)
+
+            if self._new_layer:
+                self.m.show_layer(layer)
 
         return wms_cb
-        #return lambda: wms.do_add_layer(wmslayer, layer=self.m.BM.bg_layer)
