@@ -3,7 +3,6 @@ from PyQt5.QtCore import Qt, QRectF, QSize
 from eomaps import Maps
 from functools import lru_cache
 
-
 import matplotlib.pyplot as plt
 
 
@@ -283,9 +282,6 @@ class GetColorWidget(QtWidgets.QFrame):
         if isinstance(color, str):
             color = QtGui.QColor(color)
 
-        # color = QtGui.QColor(*color.getRgb()[:3], int(self.alpha * 255))
-        # color = QtGui.QColor(*color.getRgbF())
-
         self.edgecolor = color
         self.update()
 
@@ -298,7 +294,6 @@ class GetColorWidget(QtWidgets.QFrame):
         self.set_facecolor(
             QtGui.QColor(*self.facecolor.getRgb()[:3], int(self.alpha * 255))
         )
-        # self.set_edgecolor(QtGui.QColor(*self.edgecolor.getRgb()[:3], int(self.alpha * 255)))
 
 
 class EditLayoutButton(QtWidgets.QPushButton):
