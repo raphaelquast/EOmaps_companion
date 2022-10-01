@@ -1,73 +1,79 @@
-from .base import EOmapsWindow, EOmapsCanvas, ResizableWindow
-from . import utils
-
-import sys
-
-from pathlib import Path
-iconpath = Path(__file__).parent / "icons"
-
-from eomaps import Maps
-
 from PyQt5 import QtWidgets, QtGui, QtCore
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, Signal
 
-from functools import lru_cache
+from .base import ResizableWindow
+from .common import iconpath
 
-
-import matplotlib.pyplot as plt
-@lru_cache()
-def get_cmap_pixmaps():
-    # cache the pixmaps for matplotlib colormaps
-    # Note: the cache must be cleared if new colormaps are registered!
-    # (emit the cmapsChanged signal of MenuWindow to clear the cache)
-    cmap_pixmaps = list()
-    for cmap in sorted(plt.cm._colormaps()):
-        pixmap = QtGui.QPixmap()
-        pixmap.loadFromData(plt.cm.get_cmap(cmap)._repr_png_(), "png")
-        label = QtGui.QIcon()
-        label.addPixmap(pixmap, QtGui.QIcon.Normal, QtGui.QIcon.On)
-        label.addPixmap(pixmap, QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        label.addPixmap(pixmap, QtGui.QIcon.Disabled, QtGui.QIcon.On)
-        label.addPixmap(pixmap, QtGui.QIcon.Disabled, QtGui.QIcon.Off)
-        cmap_pixmaps.append((label, cmap))
-
-    return cmap_pixmaps
+from .widgets.peek import PeekTabs
+from .widgets.editor import ArtistEditor
+from .widgets.wms import AddWMSMenuButton
+from .widgets.draw import DrawerWidget
+from .widgets.save import SaveFileWidget
+from .widgets.files import OpenFileTabs
+from .widgets.layer import AutoUpdateLayerMenuButton
+from .widgets.utils import get_cmap_pixmaps
 
 
-class MyMap(EOmapsCanvas):
-    def __init__(self, *args, m=None, **kwargs):
-        self._m = m
-
+class ControlTabs(QtWidgets.QTabWidget):
+    def __init__(self, *args, parent=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.parent = parent
 
-    def setup_map(self, width, height, dpi, crs):
-        if self._m is not None:
-            return self._m
+        tab1 = QtWidgets.QWidget()
+        tab1layout = QtWidgets.QVBoxLayout()
 
-        # initialize EOmaps Maps object
-        m = Maps(figsize=(width, height),
-                 dpi=dpi,
-                 crs=crs,
-                 layer="default")
-
-        m.add_feature.preset.coastline()
+        peektabs = PeekTabs(parent= self.parent)
+        tab1layout.addWidget(peektabs)
 
         try:
-            m.add_wms.OpenStreetMap.add_layer.default(layer="OSM")
-            m.add_wms.OpenStreetMap.add_layer.stamen_watercolor(layer="OSM watercolor")
-            m.add_wms.ESA_WorldCover.add_layer.WORLDCOVER_2020_MAP(layer="ESA WorldCover")
+            addwms = AddWMSMenuButton(m=self.m, new_layer=True)
+        except:
+            addwms = QtWidgets.QPushButton("WMS services unavailable")
+        tab1layout.addWidget(addwms)
 
-        except Exception:
-            print("WebMap layers could not be added...")
-            pass
+        tab1layout.addStretch(1)
+        tab1layout.addWidget(SaveFileWidget(parent=self.parent))
 
-        m.all.cb.click.attach.annotate(modifier=1)
-
-        return m
+        tab1.setLayout(tab1layout)
 
 
+        self.tab1 = tab1
+        self.tab2 = OpenFileTabs(parent=self.parent)
+        self.tab3 = DrawerWidget(parent=self.parent)
 
-class EOmaps_titlebar(QtWidgets.QToolBar):
+
+        self.tab6 = ArtistEditor(m=self.m)
+
+        self.addTab(self.tab1, "Compare")
+        self.addTab(self.tab6, "Edit")
+        self.addTab(self.tab2, "Open Files")
+        if hasattr(self.m.util, "draw"):   # for future "draw" capabilities
+            self.addTab(self.tab3, "Draw Shapes")
+
+        # re-populate artists on tab-change
+        self.currentChanged.connect(self.tabchanged)
+
+        self.setAcceptDrops(True)
+
+
+    def tabchanged(self):
+        if self.currentWidget() == self.tab6:
+            self.tab6.populate()
+            self.tab6.populate_layer()
+
+    @property
+    def m(self):
+        return self.parent.m
+
+
+    def dragEnterEvent(self, e):
+        # switch to open-file-tab on drag-enter
+        # (the open-file-tab takes over from there!)
+        self.setCurrentWidget(self.tab2)
+        self.tab2.setCurrentIndex(0)
+
+
+class ToolBar(QtWidgets.QToolBar):
     def __init__(self, *args, m=None, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -80,7 +86,6 @@ class EOmaps_titlebar(QtWidgets.QToolBar):
         logolabel.setPixmap(logo.scaled(logolabel.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
 
-        from .layer import AutoUpdateLayerMenuButton
         showlayer = AutoUpdateLayerMenuButton(m=self.m)
 
         b_close = QtWidgets.QToolButton()
@@ -136,10 +141,6 @@ class transparentWindow(ResizableWindow):
         super().focusInEvent(e)
 
 
-
-from PyQt5.QtWidgets import QDesktopWidget
-from PyQt5.QtCore import Signal
-
 class MenuWindow(transparentWindow):
 
     cmapsChanged = Signal()
@@ -152,11 +153,11 @@ class MenuWindow(transparentWindow):
         # (the signal is emmited by Maps-objects if a new colormap is registered)
         self.cmapsChanged.connect(lambda: get_cmap_pixmaps.cache_clear())
 
-        self.titlebar = EOmaps_titlebar(m=self.m)
-        self.titlebar.transparentQ.clicked.connect(self.cb_transparentQ)
-        self.addToolBar(self.titlebar)
+        self.toolbar = ToolBar(m=self.m)
+        self.toolbar.transparentQ.clicked.connect(self.cb_transparentQ)
+        self.addToolBar(self.toolbar)
 
-        tabs = utils.ControlTabs(parent=self)
+        tabs = ControlTabs(parent=self)
         tabs.setMouseTracking(True)
 
         self.setStyleSheet("""QToolTip {
@@ -191,117 +192,9 @@ class MenuWindow(transparentWindow):
         if self.out_alpha == 1:
             self.out_alpha = 0.25
             self.setFocus()
-            self.titlebar.transparentQ.setIcon(QtGui.QIcon(str(iconpath / "eye_closed.png")))
+            self.toolbar.transparentQ.setIcon(QtGui.QIcon(str(iconpath / "eye_closed.png")))
 
         else:
             self.out_alpha = 1
             self.setFocus()
-            self.titlebar.transparentQ.setIcon(QtGui.QIcon(str(iconpath / "eye_open.png")))
-
-
-
-class MainWindow(EOmapsWindow):
-
-    def __init__(self, *args, crs=None, m=None, **kwargs):
-        # Create the maptlotlib FigureCanvas object,
-        # which defines a single set of axes as self.axes.
-
-        if m is None:
-            width = 12
-            height = 8
-            dpi = 72
-        else:
-            width = m.figure.f.get_figwidth()
-            height = m.figure.f.get_figheight()
-            dpi = m.figure.f.dpi
-
-        canvas = MyMap(self, width=width, height=height, dpi=dpi, crs=crs, m=m)
-
-        super().__init__(eomaps_canvas = canvas, *args, **kwargs)
-        self.setWindowTitle("EOmaps QT embedding example")
-
-        b_showhide = QtWidgets.QToolButton()
-        b_showhide.setIcon(QtGui.QIcon(str(iconpath / "logo.png")))
-        b_showhide.clicked.connect(self.cb_showhide)
-        b_showhide.setAutoRaise(True)
-
-        self.toolbar.addSeparator()
-        self.toolbar.addWidget(b_showhide)
-
-        from .layer import AutoUpdateLayerMenuButton
-        showlayer = AutoUpdateLayerMenuButton(m=self.m)
-
-        self.toolbar.addWidget(showlayer)
-
-        self.toolbar.addWidget(self.b_enlarge)
-        self.toolbar.addWidget(self.b_close)
-
-        self.toolbar.setMovable(False)
-        self.setStyleSheet("border: none; spacing:5px;")
-
-        self.addToolBar(self.toolbar)
-
-        self.menu_window = MenuWindow(m=self.m)
-
-        self.show()
-        self.activateWindow()
-
-        self.center()
-
-
-
-    def cb_showhide(self):
-        if self.menu_window.isVisible():
-            self.menu_window.hide()
-        else:
-            self.menu_window.show()
-
-    def center(self):
-        qr = self.frameGeometry()
-        cp = QDesktopWidget().availableGeometry().center()
-        qr.moveCenter(cp)
-        self.move(qr.topLeft())
-
-    @property
-    def m(self):
-        # the EOmaps maps-object
-        return self.canvas.m
-
-
-
-def run(m=None):
-    app = QtWidgets.QApplication(sys.argv)
-    logo = QtGui.QIcon(str(iconpath / "logo.png"))
-    app.setWindowIcon(logo)
-    # Force the style to be the same on all OSs:
-    app.setStyle("Fusion")
-
-    # # Now use a palette to switch to dark colors:
-    palette = QtGui.QPalette()
-    palette.setColor(QtGui.QPalette.Window, QtGui.QColor(53, 53, 53))
-    palette.setColor(QtGui.QPalette.WindowText, Qt.white)
-    palette.setColor(QtGui.QPalette.Base, QtGui.QColor(25, 25, 25))
-    palette.setColor(QtGui.QPalette.AlternateBase, QtGui.QColor(53, 53, 53))
-    palette.setColor(QtGui.QPalette.ToolTipBase, Qt.black)
-    palette.setColor(QtGui.QPalette.ToolTipText, Qt.white)
-    palette.setColor(QtGui.QPalette.Text, Qt.white)
-    palette.setColor(QtGui.QPalette.Button, QtGui.QColor(53, 53, 53))
-    palette.setColor(QtGui.QPalette.ButtonText, Qt.white)
-    palette.setColor(QtGui.QPalette.BrightText, Qt.red)
-    palette.setColor(QtGui.QPalette.Link, QtGui.QColor(42, 130, 218))
-    palette.setColor(QtGui.QPalette.Highlight, QtGui.QColor(42, 130, 218))
-    palette.setColor(QtGui.QPalette.HighlightedText, Qt.black)
-
-
-    palette.setColor(QtGui.QPalette.ToolTipBase, QtGui.QColor(53, 53, 53))
-    palette.setColor(QtGui.QPalette.ToolTipText, Qt.white)
-
-    app.setPalette(palette)
-
-
-    w = MainWindow(m=m)
-    w.show()
-
-
-if __name__ == "__main__":
-    run()
+            self.toolbar.transparentQ.setIcon(QtGui.QIcon(str(iconpath / "eye_open.png")))

@@ -1,408 +1,12 @@
 from PyQt5 import QtCore, QtWidgets, QtGui
-from .wms_utils import AddWMSMenuButton
+
+from .wms import AddWMSMenuButton
+from .utils import GetColorWidget, AlphaSlider
+
+from ..common import iconpath
 
 from PyQt5.QtCore import Qt
 
-from pathlib import Path
-iconpath = Path(__file__).parent / "icons"
-
-# class LayerControl(QtWidgets.QWidget):
-#     def __init__(self, *args, m=None, **kwargs):
-
-#         super().__init__(*args, **kwargs)
-
-#         self.m = m
-
-#         self.layercheckbox = AutoUpdateLayerCheckbox(m=self.m)
-
-#         self.layout = QtWidgets.QHBoxLayout()
-#         self.layout.addWidget(self.layercheckbox)
-#         self.setLayout(self.layout)
-
-
-class AutoUpdateLayerCheckbox(QtWidgets.QComboBox):
-    def __init__(self, *args, m=None, layers=None, exclude=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.view().pressed.connect(self.handleItemPressed)
-
-        # required to make checkboxes appear with "fusion" style
-        # see https://stackoverflow.com/a/53025509/9703451
-        delegate = QtWidgets.QStyledItemDelegate(self.view())
-        self.view().setItemDelegate(delegate)
-
-
-        self._changed = False
-
-        #self.setModel(QtGui.QStandardItemModel(self))
-
-        self.m = m
-        self._layers = layers
-        self._exclude = exclude
-
-        self.last_layers = []
-
-        # update layers on every change of the Maps-object background layer
-        self.m.BM.on_layer(self.update_visible_layer, persistent=True)
-        self.update_layers()
-
-        self.setSizeAdjustPolicy(self.AdjustToContents)
-        self.setEditable(True)
-        self.lineEdit().setReadOnly(True)
-
-
-
-    def setItemChecked(self, index, checked=False):
-        item = self.model().item(index, self.modelColumn()) # QStandardItem object
-
-        if checked:
-            item.setCheckState(Qt.Checked)
-        else:
-            item.setCheckState(Qt.Unchecked)
-
-    def handleItemPressed(self, index):
-        item = self.model().itemFromIndex(index)
-
-        if item.checkState() == Qt.Checked:
-            item.setCheckState(Qt.Unchecked)
-        else:
-            item.setCheckState(Qt.Checked)
-        self._changed = True
-
-
-        uselayer = self.get_uselayer()
-        self.setCurrentText(uselayer.lstrip("_"))
-        if uselayer != "???":
-            self.m.show_layer(uselayer)
-
-
-    def get_uselayer(self):
-        active_layers = []
-        for i in range(self.count()):
-            if self.itemChecked(i):
-                item = self.model().item(i, self.modelColumn())
-                active_layers.append(item.text())
-
-        uselayer = "???"
-
-        if len(active_layers) > 1:
-            uselayer = "_|" + "|".join(active_layers)
-        elif len(active_layers) == 1:
-            uselayer = active_layers[0]
-
-        return uselayer
-
-    def hidePopup(self):
-        if not self._changed:
-            super().hidePopup()
-        self._changed = False
-
-    def itemChecked(self, index):
-        item = self.model().item(index, self.modelColumn())
-        return item.checkState() == Qt.Checked
-
-    def update_visible_layer(self, m, l):
-        # make sure to re-fetch layers first
-        self.update_layers()
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.RightButton:
-            self.update_layers()
-        elif event.button() == Qt.LeftButton:
-            self.update_layers()
-
-        super().mousePressEvent(event)
-
-    @property
-    def layers(self):
-        if self._layers is not None:
-            return self._layers
-        else:
-            return [i for i in self.m._get_layers(exclude = self._exclude) if not str(i).startswith("_")]
-
-    def addItem(self, item):
-        super().addItem(item)
-        self.setItemChecked(self.count()-1, False)
-
-    def update_layers(self):
-        layers = self.layers
-        self.clear()
-
-        for key in layers:
-            if key == "all":
-                continue
-            self.addItem(str(key))
-
-        currlayer = str(self.m.BM.bg_layer)
-        if currlayer != "all":
-            if "|" in currlayer:
-                currlayers = [i for i in currlayer.split("|") if i != "_"]
-            else:
-                currlayers = [currlayer]
-
-            for i in currlayers:
-                currindex = self.findText(i)
-                self.setItemChecked(currindex, True)
-                #self.setCurrentIndex(currindex)
-
-            uselayer = self.get_uselayer()
-            self.setCurrentText(uselayer.lstrip("_"))
-        else:
-            self.setCurrentText("- all -")
-
-
-
-
-class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
-    def __init__(self, *args, m=None, layers=None, exclude=None, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.m = m
-        self._layers = layers
-        self._exclude = exclude
-
-        self._last_layers = []
-
-        self.checkorder = []
-
-        menu = QtWidgets.QMenu()
-        menu.aboutToShow.connect(self.update_layers)
-        self.setMenu(menu)
-
-
-        # update layers on every change of the Maps-object background layer
-        self.m.BM.on_layer(self.update_visible_layer, persistent=True)
-        self.update_layers()
-
-        self.setToolTip("Use (control + click) to select multiple layers!")
-
-
-        # self.setSizeAdjustPolicy(self.AdjustToContents)
-        # self.setEditable(True)
-        # self.lineEdit().setReadOnly(True)
-
-    def get_uselayer(self):
-        active_layers = []
-        for a in self.menu().actions():
-            w = a.defaultWidget()
-
-            if isinstance(w, QtWidgets.QCheckBox) and w.isChecked():
-                active_layers.append(a.text())
-
-        uselayer = "???"
-
-        if len(active_layers) > 1:
-            uselayer = "_|" + "|".join(active_layers)
-        elif len(active_layers) == 1:
-            uselayer = active_layers[0]
-
-        return uselayer
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.RightButton:
-            self.update_layers()
-        elif event.button() == Qt.LeftButton:
-            self.update_layers()
-
-        super().mousePressEvent(event)
-
-    @property
-    def layers(self):
-        if self._layers is not None:
-            return self._layers
-        else:
-            return [i for i in self.m._get_layers(exclude = self._exclude) if not str(i).startswith("_")]
-
-
-    def update_display_text(self, l):
-        txt = l.lstrip("_|")
-        # make sure that we don't use too long labels as text
-        if len(txt) > 50:
-            txt = f"{len([1 for i in txt.split('|') if len(i) > 0])} layers visible"
-            #txt = txt[:50] + " ..."
-        self.setText(txt)
-
-
-    def update_visible_layer(self, m, l):
-        # make sure to re-fetch layers first
-        self.update_layers()
-
-        self.update_display_text(l)
-
-        self.checkorder = [i for i in l.split("|") if i != "_"]
-
-
-    def actionClicked(self):
-        # check if a keyboard modifier is pressed
-        modifiers = QtWidgets.QApplication.keyboardModifiers()
-
-        action = self.sender()
-        if not isinstance(action, QtWidgets.QWidgetAction):
-            # sometimes the sender is the button... ignore those events!
-            return
-
-        actionwidget = action.defaultWidget()
-        text = action.text()
-
-        # if no relevant modifier is pressed, just select single layers!
-        if not (modifiers == QtCore.Qt.ShiftModifier or
-                modifiers == QtCore.Qt.ControlModifier):
-
-            self.m.show_layer(text)
-            self.checkorder = [text]
-            return
-
-        if isinstance(actionwidget, QtWidgets.QCheckBox):
-            if actionwidget.isChecked():
-                for l in (i for i in text.split("|") if i != "_"):
-                    if l not in self.checkorder:
-                        self.checkorder.append(l)
-                    else:
-                        self.checkorder.remove(l)
-                        self.checkorder.append(l)
-            else:
-                if text in self.checkorder:
-                    self.checkorder.remove(text)
-
-            uselayer = "???"
-            if len(self.checkorder) > 1:
-                uselayer = "_|" + "|".join(self.checkorder)
-            elif len(self.checkorder) == 1:
-                uselayer = self.checkorder[0]
-
-            # collect all checked items and set the associated layer
-            if uselayer != "???":
-                self.m.show_layer(uselayer)
-        else:
-            self.m.show_layer(text)
-            self.checkorder = []
-
-
-
-    def update_checkstatus(self):
-        currlayer = str(self.m.BM.bg_layer)
-        if "|" in currlayer:
-            active_layers = [i for i in currlayer.split("|") if i != "_"]
-        else:
-            active_layers = [currlayer]
-
-        for action in self.menu().actions():
-            key = action.text()
-            w = action.defaultWidget()
-            if isinstance(w, QtWidgets.QCheckBox):
-
-                # temporarily disconnect triggering the action on state-changes
-                w.stateChanged.disconnect(action.trigger)
-
-                if key in active_layers:
-                    w.setChecked(True)
-                else:
-                    w.setChecked(False)
-
-                # re connect action trigger
-                w.stateChanged.connect(action.trigger)
-
-
-    def update_layers(self):
-        layers = self.layers
-        if layers == self._last_layers:
-            self.update_checkstatus()
-
-            return
-
-        # only clear and re-draw the whole tabbar if it is necessary
-        # (e.g. if the number of layers has changed)
-        self.menu().clear()
-
-        currlayer = str(self.m.BM.bg_layer)
-        if "|" in currlayer:
-            active_layers = [i for i in currlayer.split("|") if i != "_"]
-        else:
-            active_layers = [currlayer]
-
-
-        for key in layers:
-            if key == "all":
-                label = QtWidgets.QLabel(key)
-                action = QtWidgets.QWidgetAction(self.menu())
-                action.setDefaultWidget(label)
-                action.setText(key)
-
-                action.triggered.connect(self.actionClicked)
-            else:
-                checkBox = QtWidgets.QCheckBox(key, self.menu())
-                action = QtWidgets.QWidgetAction(self.menu())
-                action.setDefaultWidget(checkBox)
-                action.setText(key)
-
-                if key in active_layers:
-                    checkBox.setChecked(True)
-                else:
-                    checkBox.setChecked(False)
-
-                # connect the action of the checkbox to the action of the menu
-                checkBox.stateChanged.connect(action.trigger)
-
-                action.triggered.connect(self.actionClicked)
-
-            self.menu().addAction(action)
-
-        self.update_display_text(self.m.BM._bg_layer)
-
-        self._last_layers = layers
-
-
-
-class LayerEditor(QtWidgets.QFrame):
-    def __init__(self, *args, m=None, **kwargs):
-
-        super().__init__(*args, **kwargs)
-
-        self.m = m
-
-        self.new_layer_name = QtWidgets.QLineEdit()
-        self.new_layer_name.setMaximumWidth(300)
-        self.new_layer_name.setPlaceholderText("Create a new layer")
-
-        # self.new_layer_button = QtWidgets.QPushButton("Create")
-        # width = self.new_layer_button.fontMetrics().boundingRect(self.new_layer_button.text()).width()
-        # self.new_layer_button.setFixedWidth(width*1.6)
-
-        self.new_layer_name.returnPressed.connect(self.new_layer)
-
-        try:
-            addwms = AddWMSMenuButton(m=self.m, new_layer=False)
-        except:
-            addwms = QtWidgets.QPushButton("WMS services unavailable")
-
-        newlayer = QtWidgets.QHBoxLayout()
-        newlayer.setAlignment(Qt.AlignLeft)
-
-        newlayer.addWidget(addwms)
-        newlayer.addStretch(1)
-        newlayer.addWidget(self.new_layer_name)
-        #newlayer.addWidget(self.new_layer_button)
-
-
-        addfeature = AddFeatureWidget(m=self.m)
-
-        layout = QtWidgets.QVBoxLayout()
-        layout.addWidget(addfeature)
-        layout.addLayout(newlayer)
-        self.setLayout(layout)
-
-
-    def new_layer(self):
-        layer = self.new_layer_name.text()
-        if len(layer) == 0:
-            QtWidgets.QToolTip.showText(self.mapToGlobal(self.new_layer_name.pos()),
-                                        "Just type a layer-name and press return!")
-            return
-            #layer = self.new_layer_name.placeholderText()
-
-        m2 = self.m.new_layer(layer)
-        self.m.show_layer(layer)
-
-        return m2
 
 
 class AddFeaturesMenuButton(QtWidgets.QPushButton):
@@ -477,7 +81,6 @@ class AddFeatureWidget(QtWidgets.QFrame):
 
         self.m = m
 
-        from .utils import GetColorWidget, AlphaSlider
 
         self.selector = AddFeaturesMenuButton(m=self.m)
         self.selector.clicked.connect(self.update_props)
@@ -551,7 +154,53 @@ class AddFeatureWidget(QtWidgets.QFrame):
             )
         )
 
-class LayerArtistEditor(QtWidgets.QWidget):
+
+class NewLayerWidget(QtWidgets.QFrame):
+    def __init__(self, *args, m=None, **kwargs):
+
+        super().__init__(*args, **kwargs)
+
+        self.m = m
+
+        self.new_layer_name = QtWidgets.QLineEdit()
+        self.new_layer_name.setMaximumWidth(300)
+        self.new_layer_name.setPlaceholderText("Create a new layer")
+
+        self.new_layer_name.returnPressed.connect(self.new_layer)
+
+        try:
+            addwms = AddWMSMenuButton(m=self.m, new_layer=False)
+        except:
+            addwms = QtWidgets.QPushButton("WMS services unavailable")
+
+        newlayer = QtWidgets.QHBoxLayout()
+        newlayer.setAlignment(Qt.AlignLeft)
+
+        newlayer.addWidget(addwms)
+        newlayer.addStretch(1)
+        newlayer.addWidget(self.new_layer_name)
+
+        addfeature = AddFeatureWidget(m=self.m)
+
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(addfeature)
+        layout.addLayout(newlayer)
+        self.setLayout(layout)
+
+    def new_layer(self):
+        layer = self.new_layer_name.text()
+        if len(layer) == 0:
+            QtWidgets.QToolTip.showText(self.mapToGlobal(self.new_layer_name.pos()),
+                                        "Type a layer-name and press return!")
+            return
+
+        m2 = self.m.new_layer(layer)
+        self.m.show_layer(layer)
+
+        return m2
+
+
+class ArtistEditor(QtWidgets.QWidget):
     def __init__(self, m=None):
 
         super().__init__()
@@ -561,21 +210,18 @@ class LayerArtistEditor(QtWidgets.QWidget):
 
         self.tabs = QtWidgets.QTabWidget()
 
-        addfeature = LayerEditor(m = self.m)
-        addfeature.new_layer_name.returnPressed.connect(self.populate)
+        newlayer = NewLayerWidget(m = self.m)
+        newlayer.new_layer_name.returnPressed.connect(self.populate)
 
 
         splitter = QtWidgets.QSplitter(Qt.Vertical)
-        splitter.addWidget(addfeature)
+        splitter.addWidget(newlayer)
         splitter.addWidget(self.tabs)
-
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
 
-
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(splitter)
-        #layout.setAlignment(Qt.AlignLeft)
 
         self.setLayout(layout)
 
@@ -583,10 +229,8 @@ class LayerArtistEditor(QtWidgets.QWidget):
 
         self.tabs.tabBarClicked.connect(self.tabchanged)
         self.tabs.currentChanged.connect(self.populate_layer)
-
         self.tabs.setTabsClosable(True)
         self.tabs.tabCloseRequested.connect(self.close_handler)
-
 
         self._current_tab_idx = None
         self._current_tab_name = None

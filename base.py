@@ -1,12 +1,6 @@
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
-
-from eomaps import Maps
-
 from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtCore import Qt
 
-# %%
 class ResizableWindow(QtWidgets.QMainWindow):
 
     def __init__(self, *args, **kwargs):
@@ -221,32 +215,55 @@ class ResizableWindow(QtWidgets.QMainWindow):
             self.setGeometry(geo.x(), geo.y(), first_width, first_height)
 
 
-# canvas holding the matplotib figure
-class EOmapsCanvas(FigureCanvasQTAgg):
+class NewWindow(ResizableWindow):
+    def __init__(self, *args, parent = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.parent = parent
+        self.setWindowTitle("OpenFile")
 
-    def __init__(self, parent=None, width=5, height=4, dpi=100, crs=4326):
+        self.layout = QtWidgets.QVBoxLayout()
+        self.layout.setContentsMargins(5, 20, 5, 5)
 
-        self.m = self.setup_map(width, height, dpi, crs)
+        widget = QtWidgets.QWidget()
+        widget.setLayout(self.layout)
+        self.setCentralWidget(widget)
 
-        super().__init__(self.m.figure.f)
+        # a exit-button (add it as the last object to make sure it's on top)
+        self.floatb = FloatingButtonWidget(self)
+        self.floatb.setFixedSize(30, 30)
+        self.floatb.setText("\u274C")
+        self.floatb.setStyleSheet("text-align:top;border:none;")
+        self.floatb.clicked.connect(self.close_button_callback)
+        self.floatb.move(0,0)
 
-        self.setMinimumSize(100, 100)
+        self.floatb2 = FloatingButtonWidget(self)
+        self.floatb2.setFixedSize(30, 30)
+        self.floatb2.setText("\u25a0")
+        self.floatb2.setStyleSheet("text-align:top;border:none;")
+        self.floatb2.clicked.connect(self.maximize_button_callback)
+        self.floatb2.paddingLeft = 30
 
-        self._args = dict(parent=parent, width=width, height=height, dpi=dpi)
 
-    def setup_map(self, width, height, dpi, crs):
-        raise NotImplementedError("setup_map(widht, height, dpi) must be implemented" +
-                                  "and it must return an EOmaps.Maps object!")
 
-        # initialize EOmaps Maps object
-        m = Maps(figsize=(width, height),
-                 dpi=dpi,
-                 crs=crs
-                 )
+    def resizeEvent(self, event): #2
+        super().resizeEvent(event)
+        self.floatb.update_position()
+        self.floatb2.update_position()
 
-        m.add_feature.preset.coastline()
+    def close_button_callback(self):
+        self.close()
 
-        return m
+    def maximize_button_callback(self):
+        if not self.isMaximized():
+            self.showMaximized()
+        else:
+            self.showNormal()
+
+    @property
+    def m(self):
+        return self.parent.m
+
+
 
 class FloatingButtonWidget(QtWidgets.QPushButton): #1
 
@@ -267,121 +284,3 @@ class FloatingButtonWidget(QtWidgets.QPushButton): #1
     def resizeEvent(self, event): #2
         super().resizeEvent(event)
         self.update_position()
-
-
-# a splitter that uses the custom splitter handle
-class MySplitter(QtWidgets.QSplitter):
-    def __init__(self, *args, m=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.m = m
-    def createHandle(self):
-        return MySplitterHandle(self.orientation(), self)
-
-
-# create a custom splitterhandle so that we can decect clicks on the splitters
-class MySplitterHandle(QtWidgets.QSplitterHandle):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.layer = None
-
-        m = self.splitter().m
-        if "_resize_layer" not in m._get_layers():
-            m.add_feature.preset.coastline(layer="_resize_layer")
-
-    def mousePressEvent(self, event):
-        m = self.splitter().m
-        if event.button() == Qt.RightButton:
-            self.layer = m.BM.bg_layer
-            m.show_layer("_resize_layer")
-
-        elif event.button() == Qt.LeftButton:
-            self.layer = m.BM.bg_layer
-            m.show_layer("_resize_layer")
-
-        super().mousePressEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        m = self.splitter().m
-
-        if event.button() == Qt.RightButton:
-            m.show_layer(self.layer)
-
-        elif event.button() == Qt.LeftButton:
-            m.show_layer(self.layer)
-
-        super().mousePressEvent(event)
-
-
-class EOmapsWindow(ResizableWindow):
-    def __init__(self, eomaps_canvas, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # Create the maptlotlib FigureCanvas object,
-        # which defines a single set of axes as self.axes.
-        self.canvas = eomaps_canvas
-
-        # make sure focus is correctly set so that the map responds to keypress events
-        # see https://stackoverflow.com/a/51383190/9703451
-
-        self.canvas.setFocusPolicy(QtCore.Qt.ClickFocus)
-
-        # focus the map on startup
-        self.canvas.setFocus()
-
-        # Create a matplotlib navigation-toolbar object for the map
-        self.toolbar = NavigationToolbar2QT(self.canvas, self)
-        self.toolbar.setMinimumHeight(32)
-        self.toolbar.setMaximumHeight(32)
-
-        # -------------------------
-        # a container for nested layouts
-
-        self.layout = QtWidgets.QVBoxLayout()
-        self.layout.setContentsMargins(5, 5, 5, 5)
-
-
-        self.layout.addWidget(self.canvas)
-
-        # Create a placeholder widget to hold our toolbar and canvas.
-        widget = QtWidgets.QWidget()
-        widget.setLayout(self.layout)
-        self.setCentralWidget(widget)
-
-
-        self.b_close = QtWidgets.QPushButton()
-        self.b_close.setFixedSize(30, 30)
-        self.b_close.setText("\u274C")
-        self.b_close.clicked.connect(self.close_button_callback)
-        self.b_close.paddingLeft = 0
-        self.b_close.paddingTop = 0
-        self.b_close.setStyleSheet("text-align:top;border:none;")
-
-        self.b_enlarge = QtWidgets.QPushButton()
-        self.b_enlarge.setFixedSize(30, 30)
-        self.b_enlarge.setText("\u25a0")
-        self.b_enlarge.clicked.connect(self.maximize_button_callback)
-        self.b_enlarge.paddingLeft = 0
-        self.b_enlarge.paddingTop = 0
-        self.b_enlarge.setStyleSheet("text-align:top;border:none;")
-
-
-    @property
-    def m(self):
-        # the EOmaps maps-object
-        return self.canvas.m
-
-    def close_button_callback(self):
-        # TODO perform a clear cleanup
-        plt.close(self.m.figure.f)
-        self.m.cleanup()
-        self.canvas.m = None
-
-        self.menu_window.close()
-        self.close()
-
-    def maximize_button_callback(self):
-        if not self.isMaximized():
-            self.showMaximized()
-        else:
-            self.showNormal()
