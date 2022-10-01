@@ -1,5 +1,5 @@
 from PyQt5 import QtWidgets, QtGui
-from PyQt5.QtCore import Qt, QRectF, QSize, QLocale, QEvent
+from PyQt5.QtCore import Qt, QRectF, QSize, QLocale, QEvent, Signal
 from pathlib import Path
 
 from .base import ResizableWindow
@@ -53,33 +53,33 @@ class InputCRS(LineEditComplete):
             return t
 
 
+# cache the pixmaps for matplotlib colormaps
+cmap_pixmaps = list()
+for cmap in sorted(plt.cm._colormaps()):
+    pixmap = QtGui.QPixmap()
+    pixmap.loadFromData(plt.cm.get_cmap(cmap)._repr_png_(), "png")
+    label = QtGui.QIcon()
+    label.addPixmap(pixmap, QtGui.QIcon.Normal, QtGui.QIcon.On)
+    label.addPixmap(pixmap, QtGui.QIcon.Normal, QtGui.QIcon.Off)
+    label.addPixmap(pixmap, QtGui.QIcon.Disabled, QtGui.QIcon.On)
+    label.addPixmap(pixmap, QtGui.QIcon.Disabled, QtGui.QIcon.Off)
+    cmap_pixmaps.append((label, cmap))
+
 class CmapDropdown(QtWidgets.QComboBox):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, startcmap="viridis", **kwargs):
         super().__init__(*args, **kwargs)
 
         self.setIconSize(QSize(100, 15))
-
-        cmaps = plt.cm._colormaps()
-
         self.view().setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
-        for cmap in sorted(cmaps):
-            pixmap = QtGui.QPixmap()
-            pixmap.loadFromData(getattr(plt.cm, cmap)._repr_png_(), "png")
-            label = QtGui.QIcon()
-            label.addPixmap(pixmap, QtGui.QIcon.Normal, QtGui.QIcon.On)
-            label.addPixmap(pixmap, QtGui.QIcon.Normal, QtGui.QIcon.Off)
-            label.addPixmap(pixmap, QtGui.QIcon.Disabled, QtGui.QIcon.On)
-            label.addPixmap(pixmap, QtGui.QIcon.Disabled, QtGui.QIcon.Off)
-
-
+        for label, cmap in cmap_pixmaps:
             self.addItem(label, cmap)
 
         self.setStyleSheet("combobox-popup: 0;");
         self.setMaxVisibleItems(10)
-
-        idx = self.findText("viridis")
-        self.setCurrentIndex(idx)
+        idx = self.findText(startcmap)
+        if idx != -1:
+            self.setCurrentIndex(idx)
 
 
 
@@ -183,6 +183,8 @@ class GetColorWidget(QtWidgets.QFrame):
 
     def set_facecolor_dialog(self):
         self._dialog = QtWidgets.QColorDialog()
+        self._dialog.setWindowTitle("Select facecolor")
+        self._dialog.setWindowFlags(Qt.WindowStaysOnTopHint)
         self._dialog.setOption(QtWidgets.QColorDialog.ShowAlphaChannel, on=True)
         self._dialog.colorSelected.connect(self.set_facecolor)
         self._dialog.colorSelected.connect(self.cb_colorselected)
@@ -191,6 +193,8 @@ class GetColorWidget(QtWidgets.QFrame):
 
     def set_edgecolor_dialog(self):
         self._dialog = QtWidgets.QColorDialog()
+        self._dialog.setWindowTitle("Select edgecolor")
+        self._dialog.setWindowFlags(Qt.WindowStaysOnTopHint)
         self._dialog.setOption(QtWidgets.QColorDialog.ShowAlphaChannel, on=True)
         self._dialog.colorSelected.connect(self.set_edgecolor)
         self._dialog.colorSelected.connect(self.cb_colorselected)
@@ -428,6 +432,107 @@ class AutoUpdateLayerDropdown(QtWidgets.QComboBox):
             self.setCurrentIndex(currindex)
 
 
+class PeekMethodButtons(QtWidgets.QWidget):
+    methodChanged = Signal(str)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._method = "rectangle"
+        self.rectangle_size = 1
+        self.how = (self.rectangle_size, self.rectangle_size)
+        self.alpha = 1
+
+        self.symbols = dict(zip(
+            ("🡇", "🡅", "🡆", "🡄", "🞑"),
+            ("top", "bottom", "left", "right", "rectangle"),
+            ))
+
+        self.buttons = dict()
+        for symbol, method in self.symbols.items():
+            b = QtWidgets.QToolButton()
+            b.setText(symbol)
+            b.setAutoRaise(True)
+            b.clicked.connect(self.button_clicked)
+
+            self.buttons[method] = b
+
+
+        self.slider = QtWidgets.QSlider(Qt.Horizontal)
+        self.slider.valueChanged.connect(self.sider_value_changed)
+        self.slider.setToolTip("Set rectangle size")
+        self.slider.setRange(0, 100)
+        self.slider.setSingleStep(1)
+        self.slider.setTickPosition(QtWidgets.QSlider.NoTicks)
+        self.slider.setValue(50)
+        self.slider.setMinimumWidth(50)
+
+        self.alphaslider = QtWidgets.QSlider(Qt.Horizontal)
+        self.alphaslider.valueChanged.connect(self.alpha_changed)
+        self.alphaslider.setToolTip("Set transparency")
+        self.alphaslider.setRange(0, 100)
+        self.alphaslider.setSingleStep(1)
+        self.alphaslider.setTickPosition(QtWidgets.QSlider.NoTicks)
+        self.alphaslider.setValue(100)
+        self.alphaslider.setMinimumWidth(50)
+
+        # -------------------------
+
+
+        buttons = QtWidgets.QHBoxLayout()
+        buttons.setAlignment(Qt.AlignLeft|Qt.AlignTop)
+        buttons.addWidget(self.buttons["top"])
+        buttons.addWidget(self.buttons["bottom"])
+        buttons.addWidget(self.buttons["right"])
+        buttons.addWidget(self.buttons["left"])
+        buttons.addWidget(self.buttons["rectangle"])
+        buttons.addWidget(self.slider, 1)
+
+        layout = QtWidgets.QVBoxLayout()
+        layout.addLayout(buttons)
+        layout.addWidget(self.alphaslider)
+
+        self.setLayout(layout)
+
+        self.methodChanged.connect(self.method_changed)
+
+        self.methodChanged.emit(self._method)
+
+
+
+    def button_clicked(self):
+        self.methodChanged.emit(self.symbols[self.sender().text()])
+
+
+    def sider_value_changed(self, i):
+        self.rectangle_size = i/100
+        self.methodChanged.emit("rectangle")
+
+    def alpha_changed(self, i):
+        self.alpha = i/100
+        self.methodChanged.emit(self._method)
+
+    def method_changed(self, method):
+        self._method = method
+
+        for key, val in self.buttons.items():
+            if key == method:
+                val.setStyleSheet('QToolButton {color: red; }')
+            else:
+                val.setStyleSheet("")
+
+        if method == "rectangle":
+            if self.rectangle_size < .99:
+                self.how = (self.rectangle_size, self.rectangle_size)
+            else:
+                self.how = "full"
+        else:
+            self.how = method
+
+
+
+
+
 class PeekLayerWidget(QtWidgets.QWidget):
 
     def __init__(self, *args, parent=None, layers=None, exclude=None, how=(.5, .5), **kwargs):
@@ -450,11 +555,10 @@ class PeekLayerWidget(QtWidgets.QWidget):
         """
         super().__init__(*args, **kwargs)
 
+
         self.parent = parent
         self._layers = layers
         self._exclude = exclude
-        self._how = how
-        self.custom_how = 1
 
         self.cid = None
         self.current_layer = None
@@ -462,82 +566,26 @@ class PeekLayerWidget(QtWidgets.QWidget):
         self.layerselector = AutoUpdateLayerDropdown(m=self.m, layers=layers, exclude=exclude)
         self.layerselector.update_layers() # do this before attaching the callback!
         self.layerselector.currentIndexChanged[str].connect(self.set_layer_callback)
+        self.layerselector.setMinimumWidth(100)
+
+        self.buttons = PeekMethodButtons()
+        self.buttons.methodChanged.connect(self.method_changed)
+
 
         label = QtWidgets.QLabel("<b>Peek Layer</b>:")
         width = label.fontMetrics().boundingRect(label.text()).width()
         label.setFixedWidth(width + 5)
 
-        dropdown = QtWidgets.QHBoxLayout()
-        dropdown.addWidget(label)
-        dropdown.addWidget(self.layerselector)
-
-        self.b1 = QtWidgets.QRadioButton("🡇")
-        self.b1.toggled.connect(self.bcb1)
-
-        self.b2 = QtWidgets.QRadioButton("🡅")
-        self.b2.toggled.connect(self.bcb2)
-
-        self.b3 = QtWidgets.QRadioButton("🡆")
-        self.b3.toggled.connect(self.bcb3)
-
-        self.b4 = QtWidgets.QRadioButton("🡄")
-        self.b4.toggled.connect(self.bcb4)
-
-        self.b5 = QtWidgets.QRadioButton(f"rectangle\n(size={self.custom_how*100:.0f}%)")
-        self.b5.toggled.connect(self.bcb5)
-        self.b5.setChecked(True)
-
-        self.b6 = QtWidgets.QRadioButton("🞑")
-        self.b6.toggled.connect(self.bcb6)
+        selectorlayout = QtWidgets.QVBoxLayout()
+        selectorlayout.addWidget(label, 0, Qt.AlignTop)
+        selectorlayout.addWidget(self.layerselector, 0, Qt.AlignCenter|Qt.AlignLeft)
+        selectorlayout.setAlignment(Qt.AlignTop)
 
 
-        alphalabel = QtWidgets.QLabel("Transparency:")
-        self.alphaslider = AlphaSlider(Qt.Horizontal)
-        self.alphaslider.valueChanged.connect(self.add_peek_cb)
-        self.alphaslider.setMaximumWidth(400)
+        layout = QtWidgets.QHBoxLayout()
+        layout.addLayout(selectorlayout)
+        layout.addWidget(self.buttons)
 
-        self.slider = QtWidgets.QSlider(Qt.Horizontal)
-        self.slider.setToolTip("set percentage")
-
-        self.slider.setRange(0, 100)
-        self.slider.setSingleStep(1)
-        self.slider.setTickInterval(10)
-        self.slider.setTickPosition(QtWidgets.QSlider.TicksBothSides)
-        self.slider.setValue(50)
-        self.sider_value_changed(50)
-
-        self.slider.setMinimumWidth(50)
-        self.slider.valueChanged.connect(self.sider_value_changed)
-
-        self.slider.setStyleSheet("""QToolTip {
-                               font-family: "SansSerif";
-                               font-size:10;
-                               background-color: rgb(53, 53, 53);
-                               color: white;
-                               border: none;
-                               }""")
-
-        custom_how_layout = QtWidgets.QHBoxLayout()
-        custom_how_layout.addWidget(self.b5)
-        custom_how_layout.addWidget(self.slider)
-
-        buttons = QtWidgets.QHBoxLayout()
-        buttons.addLayout(custom_how_layout)
-        buttons.addWidget(self.b3)
-        buttons.addWidget(self.b1)
-        buttons.addWidget(self.b2)
-        buttons.addWidget(self.b4)
-        buttons.addWidget(self.b6)
-
-        #buttons.setAlignment(Qt.AlignTop|Qt.AlignRight)
-
-
-        layout = QtWidgets.QVBoxLayout()
-        layout.addLayout(dropdown)
-        layout.addLayout(buttons)
-        layout.addWidget(alphalabel)
-        layout.addWidget(self.alphaslider)
-        layout.addStretch(1)
         layout.setAlignment(Qt.AlignTop)
 
         self.setLayout(layout)
@@ -545,41 +593,6 @@ class PeekLayerWidget(QtWidgets.QWidget):
     @property
     def m(self):
         return self.parent.m
-
-    def sider_value_changed(self, i):
-        self.custom_how = i/100
-        self.bcb5()
-
-    def bcb1(self):
-        if self.b1.isChecked():
-            self.set_how("top")
-            self.add_peek_cb()
-
-    def bcb2(self):
-        if self.b2.isChecked():
-            self.set_how("bottom")
-            self.add_peek_cb()
-
-    def bcb3(self):
-        if self.b3.isChecked():
-            self.set_how("left")
-            self.add_peek_cb()
-
-    def bcb4(self):
-        if self.b4.isChecked():
-            self.set_how("right")
-            self.add_peek_cb()
-
-    def bcb5(self):
-        if self.b5.isChecked():
-            self.b5.setText(f"rectangle\n(size={self.custom_how*100:.0f}%)")
-            self.set_how((self.custom_how, self.custom_how))
-            self.add_peek_cb()
-
-    def bcb6(self):
-        if self.b6.isChecked():
-            self.set_how("full")
-            self.add_peek_cb()
 
     def set_layer_callback(self, l):
         if self.cid is not None:
@@ -590,12 +603,14 @@ class PeekLayerWidget(QtWidgets.QWidget):
         if l == "":
             return
 
-        self.cid = self.m.all.cb.click.attach.peek_layer(l, how=self._how, alpha=self.alphaslider.alpha)
+        self.cid = self.m.all.cb.click.attach.peek_layer(l,
+                                                         how=self.buttons.how,
+                                                         alpha=self.buttons.alpha)
         self.current_layer = l
 
-    def set_how(self, how):
-        self._how = how
 
+    def method_changed(self, method):
+        self.add_peek_cb()
 
     def add_peek_cb(self):
         if self.current_layer is None:
@@ -605,7 +620,9 @@ class PeekLayerWidget(QtWidgets.QWidget):
             self.m.all.cb.click.remove(self.cid)
             self.cid = None
 
-        self.cid = self.m.all.cb.click.attach.peek_layer(self.current_layer, how=self._how, alpha=self.alphaslider.alpha)
+        self.cid = self.m.all.cb.click.attach.peek_layer(self.current_layer,
+                                                         how=self.buttons.how,
+                                                         alpha=self.buttons.alpha)
 
 
 class NewWindowWidget(QtWidgets.QWidget):
@@ -1389,6 +1406,17 @@ class PlotNetCDFWidget(PlotFileWidget):
             cols = sorted(set(variables + coords))
             self.x.set_complete_vals(cols)
             self.y.set_complete_vals(cols)
+
+            if "lon" in cols:
+                self.x.setText("lon")
+            else:
+                self.x.setText(cols[0])
+
+            if "lat" in cols:
+                self.y.setText("lat")
+            else:
+                self.x.setText(cols[1])
+
             self.parameter.set_complete_vals(cols)
 
         return info.getvalue()
@@ -1472,12 +1500,30 @@ class PlotCSVWidget(PlotFileWidget):
 
 
         if len(cols) == 3:
-            self.x.setText(cols[0])
-            self.y.setText(cols[1])
+
+            if "lon" in cols:
+                self.x.setText("lon")
+            else:
+                self.x.setText(cols[0])
+
+            if "lat" in cols:
+                self.y.setText("lat")
+            else:
+                self.x.setText(cols[1])
+
             self.parameter.setText(cols[2])
         if len(cols) > 3:
-            self.x.setText(cols[1])
-            self.y.setText(cols[2])
+
+            if "lon" in cols:
+                self.x.setText("lon")
+            else:
+                self.x.setText(cols[1])
+
+            if "lat" in cols:
+                self.y.setText("lat")
+            else:
+                self.x.setText(cols[2])
+
             self.parameter.setText(cols[3])
 
         return head.__repr__()
@@ -1606,9 +1652,9 @@ class OpenDataStartTab(QtWidgets.QWidget):
     def set_std_text(self):
         self.t1.setText(
             "\n"+
-            "Open or DRAG & DROP files:\n\n"+
-            "Currently supported filetypes\n"+
-            "    NetCDF, GeoTIFF, CSV)")
+            "Open or DRAG & DROP files!\n\n"+
+            "Currently supported filetypes are:\n"+
+            "    NetCDF | GeoTIFF | CSV")
 
     def dragEnterEvent(self, e):
         if e.mimeData().hasUrls():
@@ -1776,7 +1822,7 @@ class ControlTabs(QtWidgets.QTabWidget):
         from .layer import LayerArtistEditor
         self.tab6 = LayerArtistEditor(m=self.m)
 
-        self.addTab(self.tab1, r"Compare")
+        self.addTab(self.tab1, "Compare")
         self.addTab(self.tab6, "Edit")
         self.addTab(self.tab2, "Open Files")
         self.addTab(self.tab3, "Draw Shapes")
@@ -1787,10 +1833,21 @@ class ControlTabs(QtWidgets.QTabWidget):
         # re-populate artists on tab-change
         self.currentChanged.connect(self.tabchanged)
 
+        self.setAcceptDrops(True)
+
+
     def tabchanged(self):
         if self.currentWidget() == self.tab6:
             self.tab6.populate()
+            self.tab6.populate_layer()
 
     @property
     def m(self):
         return self.parent.m
+
+
+    def dragEnterEvent(self, e):
+        # switch to open-file-tab on drag-enter
+        # (the open-file-tab takes over from there!)
+        self.setCurrentWidget(self.tab2)
+        self.tab2.setCurrentIndex(0)

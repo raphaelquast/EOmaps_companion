@@ -160,6 +160,7 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
         self._layers = layers
         self._exclude = exclude
 
+        self._last_layers = []
 
         self.checkorder = []
 
@@ -212,11 +213,20 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
             return [i for i in self.m._get_layers(exclude = self._exclude) if not str(i).startswith("_")]
 
 
+    def update_display_text(self, l):
+        txt = l.lstrip("_|")
+        # make sure that we don't use too long labels as text
+        if len(txt) > 50:
+            txt = f"{len([1 for i in txt.split('|') if len(i) > 0])} layers visible"
+            #txt = txt[:50] + " ..."
+        self.setText(txt)
+
+
     def update_visible_layer(self, m, l):
         # make sure to re-fetch layers first
         self.update_layers()
 
-        self.setText(l.lstrip("_|"))
+        self.update_display_text(l)
 
         self.checkorder = [i for i in l.split("|") if i != "_"]
 
@@ -225,18 +235,6 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
         # check if a keyboard modifier is pressed
         modifiers = QtWidgets.QApplication.keyboardModifiers()
 
-        # if modifiers == QtCore.Qt.ShiftModifier:
-        #     print('Shift+Click')
-        # elif modifiers == QtCore.Qt.ControlModifier:
-        #     print('Control+Click')
-        # elif modifiers == (QtCore.Qt.ControlModifier |
-        #                    QtCore.Qt.ShiftModifier):
-        #     print('Control+Shift+Click')
-        # else:
-        #     print('Click')
-
-
-
         action = self.sender()
         if not isinstance(action, QtWidgets.QWidgetAction):
             # sometimes the sender is the button... ignore those events!
@@ -244,7 +242,6 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
 
         actionwidget = action.defaultWidget()
         text = action.text()
-
 
         # if no relevant modifier is pressed, just select single layers!
         if not (modifiers == QtCore.Qt.ShiftModifier or
@@ -273,24 +270,47 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
                 uselayer = self.checkorder[0]
 
             # collect all checked items and set the associated layer
-            #uselayer = self.get_uselayer()
-            #self.setText(uselayer.lstrip("_|"))
             if uselayer != "???":
                 self.m.show_layer(uselayer)
         else:
             self.m.show_layer(text)
             self.checkorder = []
-            #self.setText(text.lstrip("_|"))
 
 
-        #self.setText(action.text())
 
+    def update_checkstatus(self):
+        currlayer = str(self.m.BM.bg_layer)
+        if "|" in currlayer:
+            active_layers = [i for i in currlayer.split("|") if i != "_"]
+        else:
+            active_layers = [currlayer]
+
+        for action in self.menu().actions():
+            key = action.text()
+            w = action.defaultWidget()
+            if isinstance(w, QtWidgets.QCheckBox):
+
+                # temporarily disconnect triggering the action on state-changes
+                w.stateChanged.disconnect(action.trigger)
+
+                if key in active_layers:
+                    w.setChecked(True)
+                else:
+                    w.setChecked(False)
+
+                # re connect action trigger
+                w.stateChanged.connect(action.trigger)
 
 
     def update_layers(self):
         layers = self.layers
-        self.menu().clear()
+        if layers == self._last_layers:
+            self.update_checkstatus()
 
+            return
+
+        self.menu().clear()
+        print("redraw menu")
 
         currlayer = str(self.m.BM.bg_layer)
         if "|" in currlayer:
@@ -308,7 +328,6 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
 
                 action.triggered.connect(self.actionClicked)
             else:
-
                 checkBox = QtWidgets.QCheckBox(key, self.menu())
                 action = QtWidgets.QWidgetAction(self.menu())
                 action.setDefaultWidget(checkBox)
@@ -326,11 +345,9 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
 
             self.menu().addAction(action)
 
+        self.update_display_text(self.m.BM._bg_layer)
 
-        self.setText(currlayer.lstrip("_|"))
-
-
-
+        self._last_layers = layers
 
 
 
@@ -368,8 +385,8 @@ class LayerEditor(QtWidgets.QFrame):
         addfeature = AddFeatureWidget(m=self.m)
 
         layout = QtWidgets.QVBoxLayout()
-        layout.addLayout(newlayer)
         layout.addWidget(addfeature)
+        layout.addLayout(newlayer)
         self.setLayout(layout)
 
 
@@ -564,7 +581,7 @@ class LayerArtistEditor(QtWidgets.QWidget):
         self.populate()
 
         self.tabs.tabBarClicked.connect(self.tabchanged)
-        #self.tabs.currentChanged.connect(self.tabchanged)
+        self.tabs.currentChanged.connect(self.populate_layer)
 
         self.tabs.setTabsClosable(True)
         self.tabs.tabCloseRequested.connect(self.close_handler)
@@ -595,12 +612,18 @@ class LayerArtistEditor(QtWidgets.QWidget):
 
 
     def do_close_tab(self, index):
+
         if self._msg.standardButton(self._msg.clickedButton()) != self._msg.Yes:
             return
 
         layer = self.tabs.tabText(index)
 
-        for m in (self.m.parent, *self.m._children):
+        if self.m.layer == layer:
+            print("can't delete the base-layer")
+            return
+
+
+        for m in list(self.m._children):
             if layer == m.layer:
                 m.cleanup()
 
@@ -614,15 +637,19 @@ class LayerArtistEditor(QtWidgets.QWidget):
                 print("you cannot delete the last available layer!")
                 return
 
-        if layer in self.m.BM._bg_artists:
+        if layer in list(self.m.BM._bg_artists):
             for a in self.m.BM._bg_artists[layer]:
                 self.m.BM.remove_bg_artist(a)
                 a.remove()
-            self.m.BM._bg_artists.pop(layer)
-
+            del self.m.BM._bg_artists[layer]
 
         if layer in self.m.BM._bg_layers:
             del self.m.BM._bg_layers[layer]
+
+        # also remove not-yet-fetched WMS services!
+        if layer in self.m.BM._on_layer_activation:
+            del self.m.BM._on_layer_activation[layer]
+
 
         self.populate()
 
@@ -672,11 +699,14 @@ class LayerArtistEditor(QtWidgets.QWidget):
         else:
             b_sh.setIcon(QtGui.QIcon(str(iconpath / "eye_open.png")))
 
-        b_sh.clicked.connect(self.show_hide(artist=a, layer=layer, button=b_sh))
+        b_sh.clicked.connect(self.show_hide(artist=a, layer=layer))
 
         # zorder
         l_z = QtWidgets.QLabel("zoder:")
         b_z = QtWidgets.QLineEdit()
+        b_z.setToolTip("zorder")
+        b_z.setMinimumWidth(25)
+        b_z.setMaximumWidth(25)
         validator = QtGui.QIntValidator()
         b_z.setValidator(validator)
         b_z.setText(str(a.get_zorder()))
@@ -687,6 +717,11 @@ class LayerArtistEditor(QtWidgets.QWidget):
         if alpha is not None:
             l_a = QtWidgets.QLabel("alpha:")
             b_a = QtWidgets.QLineEdit()
+            b_a.setToolTip("alpha")
+
+            b_a.setMinimumWidth(25)
+            b_a.setMaximumWidth(50)
+
             validator = QtGui.QDoubleValidator(0., 1., 3)
             validator.setLocale(QtCore.QLocale("en_US"))
 
@@ -696,95 +731,202 @@ class LayerArtistEditor(QtWidgets.QWidget):
         else:
             l_a, b_a = None, None
 
+
+        # linewidth
+        try:
+            lw = a.get_linewidth()
+            if isinstance(lw, list) and len(lw) > 1:
+                pass
+            else:
+                lw = lw[0]
+
+            if lw is not None:
+                l_lw = QtWidgets.QLabel("linewidth:")
+                b_lw = QtWidgets.QLineEdit()
+                b_lw.setToolTip("linewidth")
+
+                b_lw.setMinimumWidth(25)
+                b_lw.setMaximumWidth(50)
+                validator = QtGui.QDoubleValidator(0, 100, 3)
+                validator.setLocale(QtCore.QLocale("en_US"))
+
+                b_lw.setValidator(validator)
+                b_lw.setText(str(lw))
+                b_lw.returnPressed.connect(self.set_linewidth(artist=a, layer=layer, widget=b_lw))
+            else:
+                l_lw, b_lw = None, None
+        except Exception:
+            print(a, "has no linewidth")
+            l_lw, b_lw = None, None
+
+
         # color
         from .utils import GetColorWidget
         try:
-            facecolor = (a.get_facecolor().squeeze() * 255).tolist()
-            edgecolor = (a.get_edgecolor().squeeze() * 255).tolist()
-            if len(facecolor) != 4:
-                facecolor=(0,0,0,0)
-            if len(edgecolor) != 4:
-                edgecolor=(0,0,0,0)
+            facecolor = a.get_facecolor()
+            edgecolor = a.get_edgecolor()
+            if facecolor.shape[0] != 1:
+                facecolor = (0,0,0,0)
+                use_cmap = True
+            else:
+                facecolor = (facecolor.squeeze()*255).tolist()
+                use_cmap = False
+
+            if edgecolor.shape[0] != 1:
+                edgecolor = (0,0,0,0)
+            else:
+                edgecolor = (edgecolor.squeeze()*255).tolist()
 
             b_c = GetColorWidget(facecolor=facecolor, edgecolor=edgecolor)
             b_c.cb_colorselected = self.set_color(artist=a, layer=layer, colorwidget=b_c)
             b_c.setFrameStyle(QtWidgets.QFrame.StyledPanel | QtWidgets.QFrame.Plain)
 
+            b_c.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+            b_c.setMaximumWidth(25)
+
         except:
             b_c = None
+            use_cmap = True
             pass
 
-        layout = QtWidgets.QHBoxLayout()
-        layout.addWidget(b_sh)  # show hide
+
+        # cmap
+        from .utils import CmapDropdown
+        if use_cmap is True:
+            try:
+                cmap = a.get_cmap()
+                b_cmap = CmapDropdown(startcmap=cmap.name)
+                b_cmap.activated.connect(self.set_cmap(artist=a, layer=layer, widget=b_cmap))
+            except:
+                b_cmap = None
+                pass
+        else:
+            b_cmap = None
+
+
+
+
+        # layout = QtWidgets.QHBoxLayout()
+        # layout.addWidget(b_sh)  # show hide
+        # if b_c is not None:
+        #     layout.addWidget(b_c)   # color
+        # layout.addWidget(label, 1) # title
+        # layout.addWidget(l_z)   # zorder label
+        # layout.addWidget(b_z, 0)   # zorder
+        # layout.addWidget(l_lw)   # linewidth label
+        # layout.addWidget(b_lw, 0)   # linewidth
+
+        # if b_a is not None:
+        #     layout.addWidget(l_a)  # alpha label
+        #     layout.addWidget(b_a)  # alpha
+
+        # layout.addWidget(b_r)      # remove
+
+
+        layout = []
+        layout.append((b_sh, 0))  # show hide
         if b_c is not None:
-            layout.addWidget(b_c)   # color
-        layout.addWidget(label, 1) # title
-        layout.addWidget(l_z)   # zorder label↓
-        layout.addWidget(b_z)   # zorder
+            layout.append((b_c, 1))   # color
+        layout.append((b_z, 2))  # zorder
+
+        layout.append((label, 3)) # title
+        if b_lw is not None:
+            layout.append((b_lw, 4))   # linewidth
 
         if b_a is not None:
-            layout.addWidget(l_a)  # alpha label
-            layout.addWidget(b_a)  # alpha
+            layout.append((b_a, 5))  # alpha
 
-        layout.addWidget(b_r)      # remove
+        if b_cmap is not None:
+            layout.append((b_cmap, 5))  # cmap
+
+
+        layout.append((b_r, 6))      # remove
 
         return layout
+
+
+    def populate_layer(self):
+        layer = self.tabs.tabText(self.tabs.currentIndex())
+        widget = self.tabs.currentWidget()
+
+        if widget is None:
+            print("widget is none??")
+            return
+
+        layout = QtWidgets.QGridLayout()
+        layout.setAlignment(Qt.AlignTop|Qt.AlignLeft)
+
+        # make sure that we don't create an empty entry in the defaultdict!
+        # TODO avoid using defaultdicts!!
+        if layer in self.m.BM._bg_artists:
+            artists = self.m.BM._bg_artists[layer]
+        else:
+            artists = []
+
+        for i, a in enumerate(sorted((*artists,
+                                      *self._hidden_artists.get(layer, [])), key=str)):
+
+            a_layout = self._get_artist_layout(a, layer)
+            for art, pos in a_layout:
+                layout.addWidget(art, i, pos)
+
+        tabwidget = QtWidgets.QWidget()
+        tabwidget.setLayout(layout)
+
+        widget.setWidget(tabwidget)
 
     def populate(self):
         self._current_tab_idx = self.tabs.currentIndex()
         self._current_tab_name = self.tabs.tabText(self._current_tab_idx)
 
+        alllayers = sorted(list(self.m._get_layers()))
         self.tabs.clear()
 
         self.tabwidgets = dict()
-        for layer in sorted(list(self.m.BM._bg_artists)):
-            artists = self.m.BM._bg_artists[layer]
-            tabwidget = QtWidgets.QWidget()
-            layout = QtWidgets.QVBoxLayout()
+        for i, layer in enumerate(alllayers):
 
+            layout = QtWidgets.QGridLayout()
             layout.setAlignment(Qt.AlignTop|Qt.AlignLeft)
+
             if layer.startswith("_") or "|" in layer:
                 # make sure the currently opened tab is always added (even if empty)
                 if layer != self._current_tab_name:
                     # don't show empty layers
                     continue
 
-            for i, a in enumerate(sorted((*artists, *self._hidden_artists.get(layer, [])), key=str)):
-
-                a_layout = self._get_artist_layout(a, layer)
-                layout.addLayout(a_layout)
-
-            tabwidget.setLayout(layout)
-
             scroll = QtWidgets.QScrollArea()
             scroll.setWidgetResizable(True)
-            scroll.setWidget(tabwidget)
 
             self.tabs.addTab(scroll, layer)
 
-
-            if layer == "all":
+            if layer == "all" or layer == self.m.layer:
                 tabbar = self.tabs.tabBar()
+                # don't show the close button for this tab
                 tabbar.setTabButton(self.tabs.count()-1, tabbar.RightSide, None)
 
 
         for i in range(self.tabs.count()):
             self.tabs.setTabToolTip(i, "Use (control + click) to switch the visible layer!")
 
-
-
         try:
             # restore the previously opened tab
-            if self.tabs.tabText(self._current_tab_idx) == self._current_tab_name:
-                self.tabs.setCurrentIndex(self._current_tab_idx)
-            else:
+            found = False
+            for i in range(self.tabs.count()):
+                if self.tabs.tabText(i) == self._current_tab_name:
+                    self.tabs.setCurrentIndex(self._current_tab_idx)
+                    found = True
+                    break
+
+            if found is False:
                 print(f"Unable to restore previously opened tab '{self._current_tab_name}'!")
+                self.tabs.setCurrentIndex(self.m.BM._bg_layer)
         except:
-            print("ups the tab", self._current_tab_name, "could not be restored")
+            print("unable to activate tab")
             pass
 
-
         self.color_active_tab()
+
+
 
     def tabchanged(self, index):
         # TODO
@@ -868,14 +1010,12 @@ class LayerArtistEditor(QtWidgets.QWidget):
         return cb
 
 
-    def show_hide(self, artist, layer, button):
+    def show_hide(self, artist, layer):
         def cb():
             if artist in self.m.BM._bg_artists[layer]:
                 self._hidden_artists.setdefault(layer, []).append(artist)
                 self.m.BM.remove_bg_artist(artist, layer=layer)
                 artist.set_visible(False)
-                #button.setStyleSheet("background-color : #854242")
-                #button.setIcon(QtGui.QIcon(str(iconpath / "eye_closed.png")))
             else:
                 if layer in self._hidden_artists:
                     try:
@@ -889,11 +1029,6 @@ class LayerArtistEditor(QtWidgets.QWidget):
                 except:
                     print("problem unhiding", artist, "from layer", layer)
 
-
-                #button.setStyleSheet("background-color : #79a76e")
-                #button.setIcon(QtGui.QIcon(str(iconpath / "eye_open.png")))
-
-            button.repaint()
             self.m.redraw()
         return cb
 
@@ -912,6 +1047,26 @@ class LayerArtistEditor(QtWidgets.QWidget):
             val = widget.text()
             if len(val) > 0:
                 artist.set_alpha(float(val.replace(",", ".")))
+
+            self.m.redraw()
+
+        return cb
+
+    def set_linewidth(self, artist, layer, widget):
+        def cb():
+            val = widget.text()
+            if len(val) > 0:
+                artist.set_linewidth(float(val.replace(",", ".")))
+
+            self.m.redraw()
+
+        return cb
+
+    def set_cmap(self, artist, layer, widget):
+        def cb():
+            val = widget.currentText()
+            if len(val) > 0:
+                artist.set_cmap(val)
 
             self.m.redraw()
 

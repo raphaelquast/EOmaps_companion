@@ -92,7 +92,9 @@ class AddWMSMenuButton(QtWidgets.QPushButton):
             return
 
         def wms_cb():
-            wms.do_add_layer(wmslayer, layer=self.m.BM.bg_layer)
+            layer = wms.name + "_" + wmslayer
+            wms.do_add_layer(wmslayer, layer=layer)
+            self.m.show_layer(layer)
 
         return wms_cb
         #return lambda: wms.do_add_layer(wmslayer, layer=self.m.BM.bg_layer)
