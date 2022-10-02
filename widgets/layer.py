@@ -104,7 +104,7 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
 
         self._last_layers = []
 
-        self.checkorder = []
+        self.checked_layers = []
 
         menu = QtWidgets.QMenu()
         menu.aboutToShow.connect(self.update_layers)
@@ -153,11 +153,19 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
             ]
 
     def update_display_text(self, l):
+        # TODO properly indicate temporary multi-layers
         txt = l.lstrip("_|")
         # make sure that we don't use too long labels as text
         if len(txt) > 50:
             txt = f"{len([1 for i in txt.split('|') if len(i) > 0])} layers visible"
             # txt = txt[:50] + " ..."
+
+        if l.startswith("_"):
+            txt = "⧉  " + txt
+            self.setStyleSheet("QPushButton{color: rgb(200,50,50)}")
+        else:
+            self.setStyleSheet("QPushButton{color: rgb(50,200,50)}")
+
         self.setText(txt)
 
     def update_visible_layer(self, m, l):
@@ -166,7 +174,7 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
 
         self.update_display_text(l)
 
-        self.checkorder = [i for i in l.split("|") if i != "_"]
+        self.checked_layers = sorted([i for i in l.split("|") if i != "_"])
 
     def actionClicked(self):
         # check if a keyboard modifier is pressed
@@ -190,27 +198,24 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
         if isinstance(actionwidget, QtWidgets.QCheckBox):
             if actionwidget.isChecked():
                 for l in (i for i in text.split("|") if i != "_"):
-                    if l not in self.checkorder:
-                        self.checkorder.append(l)
-                    else:
-                        self.checkorder.remove(l)
-                        self.checkorder.append(l)
+                    if l not in self.checked_layers:
+                        self.checked_layers.append(l)
             else:
-                if text in self.checkorder:
-                    self.checkorder.remove(text)
+                if text in self.checked_layers:
+                    self.checked_layers.remove(text)
 
             uselayer = "???"
-            if len(self.checkorder) > 1:
-                uselayer = "_|" + "|".join(self.checkorder)
-            elif len(self.checkorder) == 1:
-                uselayer = self.checkorder[0]
+            if len(self.checked_layers) > 1:
+                uselayer = "_|" + "|".join(sorted(self.checked_layers))
+            elif len(self.checked_layers) == 1:
+                uselayer = self.checked_layers[0]
 
             # collect all checked items and set the associated layer
             if uselayer != "???":
                 self.m.show_layer(uselayer)
         else:
             self.m.show_layer(text)
-            self.checkorder = []
+            self.checked_layers = []
 
     def update_checkstatus(self):
         currlayer = str(self.m.BM.bg_layer)
@@ -253,7 +258,7 @@ class AutoUpdateLayerMenuButton(QtWidgets.QPushButton):
             active_layers = [currlayer]
 
         for key in layers:
-            if key == "all":
+            if key == "all" or "|" in key:
                 label = QtWidgets.QLabel(key)
                 action = QtWidgets.QWidgetAction(self.menu())
                 action.setDefaultWidget(label)

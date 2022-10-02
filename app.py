@@ -1,5 +1,5 @@
 from PyQt5 import QtWidgets, QtGui, QtCore
-from PyQt5.QtCore import Qt, Signal
+from PyQt5.QtCore import Qt, pyqtSignal
 
 from .base import ResizableWindow
 from .common import iconpath
@@ -144,14 +144,14 @@ class transparentWindow(ResizableWindow):
 
 class MenuWindow(transparentWindow):
 
-    cmapsChanged = Signal()
+    cmapsChanged = pyqtSignal()
 
     def __init__(self, *args, m=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.m = m
 
         # clear the colormaps-dropdown pixmap cache if the colormaps have changed
-        # (the signal is emmited by Maps-objects if a new colormap is registered)
+        # (the pyqtSignal is emmited by Maps-objects if a new colormap is registered)
         self.cmapsChanged.connect(lambda: get_cmap_pixmaps.cache_clear())
 
         self.toolbar = ToolBar(m=self.m)

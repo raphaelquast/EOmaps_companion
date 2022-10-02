@@ -1,11 +1,11 @@
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import Qt, Signal
+from PyQt5.QtCore import Qt, pyqtSignal
 
 from .layer import AutoUpdateLayerDropdown, AutoUpdateLayerMenuButton
 
 
 class PeekMethodButtons(QtWidgets.QWidget):
-    methodChanged = Signal(str)
+    methodChanged = pyqtSignal(str)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -261,7 +261,7 @@ class PeekTabs(QtWidgets.QTabWidget):
         w.buttons.methodChanged.connect(cb)
         w.layerselector.currentIndexChanged[str].connect(cb)
 
-        # emit signal to set text
+        # emit pyqtSignal to set text
         w.buttons.methodChanged.emit(w.buttons._method)
 
         # a tab that is used to create new tabs
@@ -283,7 +283,7 @@ class PeekTabs(QtWidgets.QTabWidget):
             w.modifier.textChanged.connect(cb)
             w.buttons.methodChanged.connect(cb)
             w.layerselector.currentIndexChanged[str].connect(cb)
-            # emit signal to set text
+            # emit pyqtSignal to set text
             w.buttons.methodChanged.emit(w.buttons._method)
 
     def close_handler(self, index):

@@ -57,8 +57,11 @@ class AddFeaturesMenuButton(QtWidgets.QPushButton):
 
     def menu_callback_factory(self, featuretype, feature):
         def cb():
-            if "|" in self.m.BM.bg_layer:
-                print("adding features to multi-layers is not supported!")
+            if self.m.BM.bg_layer.startswith("_"):
+                print(
+                    "Adding features to temporary multi-layers is not supported!"
+                    "Create a specific multi-layer (e.g. 'layer1|layer2' first!"
+                )
                 return
             try:
                 getattr(getattr(self.m.add_feature, featuretype), feature)(
@@ -304,20 +307,21 @@ class ArtistEditor(QtWidgets.QWidget):
     def color_active_tab(self, m=None, l=None):
 
         defaultcolor = self.tabs.palette().color(self.tabs.foregroundRole())
+        activecolor = QtGui.QColor(50, 200, 50)
+        multicolor = QtGui.QColor(200, 50, 50)
 
         for i in range(self.tabs.count()):
             layer = self.tabs.tabText(i)
 
             active_layers = self.m.BM._bg_layer.split("|")
-            color = (
-                QtGui.QColor(100, 200, 100)
-                if len(active_layers) == 1
-                else QtGui.QColor(200, 100, 100)
-            )
+            color = activecolor if len(active_layers) == 1 else multicolor
             if layer in active_layers:
                 self.tabs.tabBar().setTabTextColor(i, color)
             else:
                 self.tabs.tabBar().setTabTextColor(i, defaultcolor)
+
+            if l == layer:
+                self.tabs.tabBar().setTabTextColor(i, activecolor)
 
     def _get_artist_layout(self, a, layer):
         # label
@@ -463,22 +467,6 @@ class ArtistEditor(QtWidgets.QWidget):
         else:
             b_cmap = None
 
-        # layout = QtWidgets.QHBoxLayout()
-        # layout.addWidget(b_sh)  # show hide
-        # if b_c is not None:
-        #     layout.addWidget(b_c)   # color
-        # layout.addWidget(label, 1) # title
-        # layout.addWidget(l_z)   # zorder label
-        # layout.addWidget(b_z, 0)   # zorder
-        # layout.addWidget(l_lw)   # linewidth label
-        # layout.addWidget(b_lw, 0)   # linewidth
-
-        # if b_a is not None:
-        #     layout.addWidget(l_a)  # alpha label
-        #     layout.addWidget(b_a)  # alpha
-
-        # layout.addWidget(b_r)      # remove
-
         layout = []
         layout.append((b_sh, 0))  # show hide
         if b_c is not None:
@@ -543,7 +531,7 @@ class ArtistEditor(QtWidgets.QWidget):
             layout = QtWidgets.QGridLayout()
             layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)
 
-            if layer.startswith("_") or "|" in layer:
+            if layer.startswith("_"):  # or "|" in layer:
                 # make sure the currently opened tab is always added (even if empty)
                 if layer != self._current_tab_name:
                     # don't show empty layers
@@ -615,13 +603,14 @@ class ArtistEditor(QtWidgets.QWidget):
         elif modifiers == Qt.ShiftModifier:
             currlayers = [i for i in self.m.BM._bg_layer.split("|") if i != "_"]
 
-            if layer not in currlayers:
-                currlayers.append(layer)
-            else:
-                currlayers.remove(layer)
+            for l in (i for i in layer.split("|") if i != "_"):
+                if l not in currlayers:
+                    currlayers.append(l)
+                else:
+                    currlayers.remove(l)
 
             if len(currlayers) > 1:
-                uselayer = "_|" + "|".join(currlayers)
+                uselayer = "_|" + "|".join(sorted(currlayers))
 
                 self.m.show_layer(uselayer)
             else:
